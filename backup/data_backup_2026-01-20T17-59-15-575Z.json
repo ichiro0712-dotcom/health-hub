@@ -1,0 +1,1609 @@
+{
+  "timestamp": "2026-01-20T17:59:15.575Z",
+  "healthRecords": [
+    {
+      "id": "cmju80lka0001a2ppglj3b4ae",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "date": "2021-04-14T00:00:00.000Z",
+      "status": "verified",
+      "title": "人間ドック2021",
+      "summary": "ポリープ切除、動脈硬化、脂質代謝（C）、軽度の貧血傾向、痛風・尿酸（C）、「胃びらん」「表層性胃炎」",
+      "data": {
+        "results": [
+          {
+            "item": "身長",
+            "unit": "cm",
+            "value": 185.7,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "体重",
+            "unit": "kg",
+            "value": 78.1,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "BMI",
+            "unit": "",
+            "value": 22.6,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "標準体重",
+            "unit": "kg",
+            "value": 75.9,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "肥満度",
+            "unit": "%",
+            "value": 2.9,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "腹囲",
+            "unit": "cm",
+            "value": 87,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "矯正視力(右)",
+            "unit": "",
+            "value": 0.6,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "矯正視力(左)",
+            "unit": "",
+            "value": 0.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "眼圧(右)",
+            "unit": "mmHg",
+            "value": 15,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "眼圧(左)",
+            "unit": "mmHg",
+            "value": 14,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "収縮期血圧",
+            "unit": "mmHg",
+            "value": 104,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "拡張期血圧",
+            "unit": "mmHg",
+            "value": 60,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "聴力(1000Hz)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "所見なし (Normal)"
+          },
+          {
+            "item": "聴力(4000Hz)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "所見なし (Normal)"
+          },
+          {
+            "item": "尿比重",
+            "unit": "",
+            "value": 1.006,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "白血球数",
+            "unit": "x100/μL",
+            "value": 59,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "赤血球数",
+            "unit": "x10,000/μL",
+            "value": 414,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ヘモグロビン",
+            "unit": "g/dL",
+            "value": 12.9,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "ヘマトクリット",
+            "unit": "%",
+            "value": 38.4,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "血小板数",
+            "unit": "x10,000/μL",
+            "value": 22.3,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "総タンパク",
+            "unit": "g/dL",
+            "value": 6.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "アルブミン",
+            "unit": "g/dL",
+            "value": 4.6,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "A/G比",
+            "unit": "",
+            "value": 2.1,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "AST(GOT)",
+            "unit": "U/L",
+            "value": 16,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ALT(GPT)",
+            "unit": "U/L",
+            "value": 17,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "γ-GTP",
+            "unit": "U/L",
+            "value": 24,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ALP",
+            "unit": "U/L",
+            "value": 49,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "総ビリルビン",
+            "unit": "mg/dL",
+            "value": 0.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "LDH",
+            "unit": "U/L",
+            "value": 165,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "コリンエステラーゼ",
+            "unit": "U/L",
+            "value": 307,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "血清アミラーゼ",
+            "unit": "U/L",
+            "value": 69,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "尿素窒素(BUN)",
+            "unit": "mg/dL",
+            "value": 14.2,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "クレアチニン",
+            "unit": "mg/dL",
+            "value": 0.89,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "eGFR",
+            "unit": "",
+            "value": 75.4,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "尿酸(UA)",
+            "unit": "mg/dL",
+            "value": 7.4,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "CRP",
+            "unit": "mg/dL",
+            "value": 0.01,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "リウマチ反応",
+            "unit": "IU/ml",
+            "value": 0,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "総コレステロール",
+            "unit": "mg/dL",
+            "value": 227,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "HDLコレステロール",
+            "unit": "mg/dL",
+            "value": 53,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "LDLコレステロール",
+            "unit": "mg/dL",
+            "value": 153,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "non-HDLコレステロール",
+            "unit": "mg/dL",
+            "value": 174,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "中性脂肪",
+            "unit": "mg/dl",
+            "value": 107,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "空腹時血糖",
+            "unit": "mg/dL",
+            "value": 93,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "HbA1c",
+            "unit": "%",
+            "value": 5,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ペプシノゲン I",
+            "unit": "ng/mL",
+            "value": 70.1,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ペプシノゲン I/II比",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "3.1以上"
+          },
+          {
+            "item": "便中ピロリ菌",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-)"
+          },
+          {
+            "item": "PSA",
+            "unit": "ng/mL",
+            "value": 1.28,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "AFP",
+            "unit": "ng/mL",
+            "value": 4.3,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "CA19-9",
+            "unit": "U/mL",
+            "value": 6.5,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "SCC",
+            "unit": "ng/mL",
+            "value": 1,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "BFP",
+            "unit": "ng/mL",
+            "value": 37,
+            "category": "Manual",
+            "evaluation": ""
+          }
+        ]
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "AI解析メモ(人間ドック一般）",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197772968-2nqokskclw7.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_0２"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773198-coja0tbpka9.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_01"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773358-re2xw3dbua.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_03"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773520-fg4ghrp60rk.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_04"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773679-ev1gft2re0j.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_05"
+              }
+            ],
+            "content": "■総合判定と主要な所見\nいくつかの項目で「C（3ヶ月〜12ヶ月後の再検査・経過観察）」の判定が出ています。\n・脂質代謝（C）: 総コレステロール、LDLコレステロール（悪玉）が高めです。\n・血液一般（C）: 軽度の貧血傾向（血色素量、ヘマトクリットの低下）が見られます。\n・痛風・尿酸（C）: 尿酸値が基準をわずかに上回っています。\n・上部消化管（C）: 胃カメラで「胃びらん」「表層性胃炎」が認められました。\n・下部消化管（C）: 大腸カメラにてポリープを切除（良性の腺腫）。"
+          },
+          {
+            "title": "大腸ポリープ切除、動脈硬化（首）",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773840-ger67lnofzk.jpeg",
+                "title": "大腸カメラ検査"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197774002-q8nsyvvn3z7.jpeg",
+                "title": "動脈硬化（首）"
+              }
+            ],
+            "content": "■大腸ポリープ切除術\n診断医師: 伊井 和成\n\n■所見:\n・全大腸の観察を実施。\n・S状結腸に、6mm大のIs型ポリープが発見されました。\n\n■実施した処置:\n・コールドスネアポリペクトミーを施行し、ポリープを切除しました。\n・切除部位に対し、クリップを1個施行（止血・保護）しました。\n\n\n■首のエコー検査にて動脈硬化が認められる\n"
+          }
+        ],
+        "hospitalName": "二子玉川メディカルクリニック"
+      },
+      "images": [],
+      "createdAt": "2025-12-31T16:18:44.650Z",
+      "updatedAt": "2026-01-20T15:44:47.918Z"
+    },
+    {
+      "id": "cmju8ivjc0028m9jyg2tnlx20",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "date": "2024-10-03T00:00:00.000Z",
+      "status": "verified",
+      "title": "人間ドック2024",
+      "summary": "心電図 [判定C]*ST上昇（早期再分極の疑い）、軽度の貧血傾向、脂質代謝 [判定B]:",
+      "data": {
+        "results": [
+          {
+            "item": "身長",
+            "unit": "cm",
+            "value": 186.9,
+            "category": "Manual",
+            "evaluation": "-"
+          },
+          {
+            "item": "体重",
+            "unit": "kg",
+            "value": 72.2,
+            "category": "Manual",
+            "evaluation": "-"
+          },
+          {
+            "item": "BMI",
+            "unit": "",
+            "value": 20.7,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "腹囲",
+            "unit": "cm",
+            "value": 79,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "収縮期血圧",
+            "unit": "mmHg",
+            "value": 100,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "拡張期血圧",
+            "unit": "mmHg",
+            "value": 69,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "総コレステロール",
+            "unit": "mg/dl",
+            "value": 207,
+            "category": "Manual",
+            "evaluation": "B"
+          },
+          {
+            "item": "HDLコレステロール",
+            "unit": "mg/dl",
+            "value": 74,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "LDLコレステロール",
+            "unit": "mg/dl",
+            "value": 121,
+            "category": "Manual",
+            "evaluation": "B"
+          },
+          {
+            "item": "中性脂肪",
+            "unit": "mg/dl",
+            "value": 40,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "空腹時血糖",
+            "unit": "mg/dl",
+            "value": 80,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "HbA1c",
+            "unit": "%",
+            "value": 5.2,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "AST(GOT)",
+            "unit": "U/L",
+            "value": 25,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "ALT(GPT)",
+            "unit": "U/L",
+            "value": 12,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "γ-GTP",
+            "unit": "U/L",
+            "value": 15,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "血清アミラーゼ",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "Not Tested"
+          },
+          {
+            "item": "尿素窒素(BUN)",
+            "unit": "mg/dl",
+            "value": 7.3,
+            "category": "Manual",
+            "evaluation": "B"
+          },
+          {
+            "item": "クレアチニン",
+            "unit": "mg/dl",
+            "value": 0.91,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "eGFR",
+            "unit": "",
+            "value": 71.7,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "尿酸(UA)",
+            "unit": "mg/dl",
+            "value": 6.9,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "尿蛋白",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-)"
+          },
+          {
+            "item": "尿糖",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-)"
+          },
+          {
+            "item": "尿潜血",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-)"
+          },
+          {
+            "item": "白血球数",
+            "unit": "/μl",
+            "value": 3900,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "赤血球数",
+            "unit": "万/μl",
+            "value": 401,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "ヘモグロビン",
+            "unit": "g/dl",
+            "value": 12.3,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "ヘマトクリット",
+            "unit": "%",
+            "value": 37.3,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "血小板数",
+            "unit": "万/μl",
+            "value": 25.5,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "CEA",
+            "unit": "ng/ml",
+            "value": 2.5,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "AFP",
+            "unit": "ng/ml",
+            "value": 4.2,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "CA19-9",
+            "unit": "U/ml",
+            "value": 5.3,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "CYFRA",
+            "unit": "ng/ml",
+            "value": 1,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "PSA",
+            "unit": "ng/ml",
+            "value": 0.64,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "HBs抗原",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "Negative"
+          },
+          {
+            "item": "HCV抗体",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "Negative"
+          },
+          {
+            "item": "梅毒",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "Negative"
+          },
+          {
+            "item": "胃カメラ",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "心電図",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "胸部X線",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "腹部超音波",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "大腸内視鏡",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "ペプシノゲン I",
+            "unit": "ng/mL",
+            "value": 46.9,
+            "category": "Manual",
+            "evaluation": null
+          },
+          {
+            "item": "ペプシノゲン II",
+            "unit": "ng/mL",
+            "value": 7.1,
+            "category": "Manual",
+            "evaluation": null
+          },
+          {
+            "item": "ペプシノゲン I/II比",
+            "unit": null,
+            "value": 6.6,
+            "category": "Manual",
+            "evaluation": null
+          },
+          {
+            "item": "ピロリ菌抗体",
+            "unit": null,
+            "value": null,
+            "category": "Manual",
+            "evaluation": "（−）(陰性)"
+          }
+        ]
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "AI解析メモ（人間ドック一般）",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767198776598-gmnraje2apt.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_01"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767198776796-ndkhcso00f.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_02"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767198776971-pjdgydn837b.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_03"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767198777124-mhjynpck6td.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_14"
+              }
+            ],
+            "content": "■ 総合判定・重要ポイント\n今回の結果で注意が必要、または経過観察とされた主な点は以下の通りです。\n\n・消化器（胃カメラ）[判定C]:\n慢性萎縮性胃炎が認められます。ヘリコバクター・ピロリ菌の2次除菌後の判定が未完了の状態ですので、医師の指示に従い確認検査を受けてください。\n\n・心電図 [判定C]:\n**ST上昇（早期再分極の疑い）**が見られます。自覚症状がある場合は循環器内科の受診を検討してください。\n\n・血液一般（貧血指標）[判定C]:\nヘモグロビン（12.3）およびヘマトクリット（37.3）が基準値を下回っており、軽度の貧血傾向（判定C）です。\n\n・脂質代謝 [判定B]:\n総コレステロール（207）とLDLコレステロール（121）がわずかに基準値を超えていますが、日常生活に支障ない範囲（判定B）です。"
+          },
+          {
+            "title": "胃カメラ・大腸カメラ",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359299-3m8uf9vwkck.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_04"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359516-zmza2boblud.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_05"
+              }
+            ],
+            "content": "1. 大腸内視鏡検査の結果\n診断: 異常なしと診断されています。\n所見: 内容は「ほぼ正常（almost normal）」という評価です。\n\n2. 胃内視鏡検査の結果\n診断: ヘリコバクター・ピロリ菌の除菌後における「萎縮性胃炎」と診断されています。\n所見: 胃の萎縮の状態（C-II分類）が認められますが、これはピロリ菌除菌後の所見として記録されています。"
+          },
+          {
+            "title": "全身MRI・内臓脂肪測定結果・血液検査・感染症・がんリスク判定",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359672-if9x7k2hu4j.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_07"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359816-apicckzplim.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_08"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359967-d5zejs6nnjc.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_09"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199360123-c5kdnq0omrt.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_10"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199360295-e6ya5rqftq.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_11"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199360492-th5vicqeeud.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_12"
+              }
+            ],
+            "content": "## 1. 全身CT検査・内臓脂肪測定結果\n画像診断およびCTによる体組成分析の結果です。\n\n* **全身CT所見**: 頭部、頸部、腹部（肝・胆・膵・脾・腎）、骨盤部（前立腺・膀胱）、脊椎のいずれも異常は認められませんでした。\n* **胸部所見**: 両肺尖部に「陳旧性炎症性変化（過去の炎症の跡）」が認められますが、治療の必要はないとの診断です。\n* **内臓脂肪**: 内臓脂肪面積は **44.5 ** であり、基準となる 100  を大幅に下回る「正常」判定です。\n* **BMI**: 21.4 と標準的な数値です。\n\n\n## 3. 血液検査・感染症・がんリスク判定\n詳細な血液分析およびリスク分類の結果です。\n\n* **胃がんリスク（ABC分類）**: 「A群」と判定されていますが、除菌経験がある場合は厳密には「E群（除菌群）」に該当し、定期的な検査が推奨される旨が記されています。\n* **ペプシノゲン**: PG I は 46.9 、I/II比は 6.6 です。\n* **腫瘍マーカー**: CEA(2.5)、AFP(4.2)、CA19-9(5.3)、シフラ(1.0以下)、PSA(0.639)のすべてが基準値内です。\n* **ウイルス検査**: B型肝炎（HBs抗原・抗体）、C型肝炎（HCV抗体）、HIV、梅毒のいずれも「陰性」です。\n* **貧血指標**: ヘモグロビン(12.3 )、ヘマトクリット(37.3 %)が基準値をわずかに下回っており、軽度の貧血傾向が示されています。"
+          }
+        ],
+        "hospitalName": "新宿トミヒサクロスクリニック"
+      },
+      "images": [],
+      "createdAt": "2025-12-31T16:32:57.384Z",
+      "updatedAt": "2026-01-20T15:44:47.924Z"
+    },
+    {
+      "id": "cmkmqxx6k002pbvnf8ok7vdwn",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "date": "2017-02-28T00:00:00.000Z",
+      "status": "verified",
+      "title": "2017_生活習慣予防検診",
+      "summary": "便潜血反応陽性、LDLコレステロールが高い、高尿酸血症",
+      "data": {
+        "results": [
+          {
+            "item": "身長",
+            "unit": "cm",
+            "value": 186.3,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "体重",
+            "unit": "kg",
+            "value": 76.4,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "BMI",
+            "unit": "",
+            "value": 22.2,
+            "category": "Manual",
+            "evaluation": "標準 (Standard)"
+          },
+          {
+            "item": "腹囲",
+            "unit": "cm",
+            "value": 87.4,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "収縮期血圧",
+            "unit": "mmHg",
+            "value": 100,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "拡張期血圧",
+            "unit": "mmHg",
+            "value": 50,
+            "category": "Manual",
+            "evaluation": "L (低値)"
+          },
+          {
+            "item": "総コレステロール",
+            "unit": "mg/dL",
+            "value": 229,
+            "category": "Manual",
+            "evaluation": "H (判定3)"
+          },
+          {
+            "item": "中性脂肪",
+            "unit": "mg/dL",
+            "value": 97,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "HDLコレステロール",
+            "unit": "mg/dL",
+            "value": 62,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "LDLコレステロール",
+            "unit": "mg/dL",
+            "value": 150,
+            "category": "Manual",
+            "evaluation": "H (判定3)"
+          },
+          {
+            "item": "AST(GOT)",
+            "unit": "U/L",
+            "value": 17,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ALT(GPT)",
+            "unit": "U/L",
+            "value": 12,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "γ-GTP",
+            "unit": "U/L",
+            "value": 18,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ALP",
+            "unit": "U/L",
+            "value": 204,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "空腹時血糖",
+            "unit": "mg/dL",
+            "value": 82,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "尿酸(UA)",
+            "unit": "mg/dL",
+            "value": 7.2,
+            "category": "Manual",
+            "evaluation": "H (判定3)"
+          },
+          {
+            "item": "ヘマトクリット",
+            "unit": "%",
+            "value": 41.3,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ヘモグロビン",
+            "unit": "g/dL",
+            "value": 13.3,
+            "category": "Manual",
+            "evaluation": "L (判定2)"
+          },
+          {
+            "item": "赤血球数",
+            "unit": "x10^4/μL",
+            "value": 440,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "白血球数",
+            "unit": "/μL",
+            "value": 5020,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "胃部X線",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "異常なし (No abnormality)"
+          },
+          {
+            "item": "便潜血(1日目)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "陽性 (+)"
+          },
+          {
+            "item": "便潜血(2日目)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "陰性 (-)"
+          },
+          {
+            "item": "心電図",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "異常なし (No abnormality)"
+          },
+          {
+            "item": "胸部X線",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "異常なし (No abnormality)"
+          }
+        ]
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "AI解析メモ",
+            "images": [
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768923334979-8qd4jbeizpw.JPG",
+                "title": "20170228_生活習慣予防検診1"
+              },
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768923335099-ffkuyhasmwq.JPG",
+                "title": "20170228_生活習慣予防検診2"
+              }
+            ],
+            "content": "総合判定: 要精密検査（指示区分 5）\n既往歴: 痛風\n喫煙歴: あり\nメタボリックシンドローム判定: 非該当\n\n●医師からの指導内容\n：便潜血反応陽性について：\n便潜血反応陽性についてはポリープや腫瘍がみつかることもありますので、大腸の精密検査が必要です。一度、ご来院下さい。\n\n：LDLコレステロールについて：\nLDLコレステロールが高値です。この値が増加すると動脈硬化に進行していきます。食事や生活習慣の早めの改善が重要です。\n食生活に十分注意をして、運動するよう心がけてください。\n\n：高尿酸血症について：\n高尿酸血症は、痛風・腎結石・尿管結石・動脈硬化及び心筋梗塞の原因となりうるので、食事に注意し定期的に検査を受けましょう。\n\n：血液一般所見について：\n血液一般所見において軽度の異常が見られますが心配ないと思われます。（※ヘモグロビン低値のこと）\n\n：低血圧について：\n低血圧は、心配ありません。"
+          }
+        ],
+        "hospitalName": "フェニックス メディカル クリニック"
+      },
+      "images": [
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768923334979-8qd4jbeizpw.JPG",
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768923335099-ffkuyhasmwq.JPG"
+      ],
+      "createdAt": "2026-01-20T15:26:05.373Z",
+      "updatedAt": "2026-01-20T15:44:47.926Z"
+    },
+    {
+      "id": "cmkmuvhla000ss61v9d3on1pt",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "date": "2025-11-28T00:00:00.000Z",
+      "status": "verified",
+      "title": "胃カメラ・大腸カメラ検査",
+      "summary": "大腸ポリープ2個切除（5mm以下）/痔核/逆流性食道炎（軽度）/萎縮性胃炎（ピロリ菌除菌後）/胃の生検実施/中性脂肪高値（252 mg/dL）/貧血傾向",
+      "data": {
+        "results": [
+          {
+            "item": "白血球数",
+            "unit": "/μL",
+            "value": 4650,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "赤血球数",
+            "unit": "×10⁴/μL",
+            "value": 419,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ヘモグロビン",
+            "unit": "g/dL",
+            "value": 12.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ヘマトクリット",
+            "unit": "%",
+            "value": 39.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "MCV",
+            "unit": "fL",
+            "value": 95,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "MCH",
+            "unit": "pg",
+            "value": 30.5,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "MCHC",
+            "unit": "%",
+            "value": 32.2,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "血小板数",
+            "unit": "×10⁴/μL",
+            "value": 22.2,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "総ビリルビン",
+            "unit": "mg/dL",
+            "value": 0.5,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "AST(GOT)",
+            "unit": "U/L",
+            "value": 14,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ALT(GPT)",
+            "unit": "U/L",
+            "value": 12,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "γ-GTP",
+            "unit": "U/L",
+            "value": 16,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "中性脂肪",
+            "unit": "mg/dL",
+            "value": 252,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "HDLコレステロール",
+            "unit": "mg/dL",
+            "value": 55,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "LDLコレステロール",
+            "unit": "mg/dL",
+            "value": 139,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "クレアチニン",
+            "unit": "mg/dL",
+            "value": 1.02,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "尿酸",
+            "unit": "mg/dL",
+            "value": 6.5,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "法定性",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-) 陰性"
+          },
+          {
+            "item": "抗原",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-) 陰性"
+          },
+          {
+            "item": "抗体",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-) 陰性"
+          },
+          {
+            "item": "インデックス",
+            "unit": "",
+            "value": 0.001,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ユニット",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "0.1未満"
+          }
+        ]
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "AI解析メモ",
+            "images": [
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929369865-wbqimezy8j.jpg",
+                "title": "2512大腸・胃カメラ_ふくだ代々木上原クリニック1"
+              },
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929369972-vcyeg4ldja9.jpg",
+                "title": "2512大腸・胃カメラ_ふくだ代々木上原クリニック2"
+              }
+            ],
+            "content": "赤血球数、血色素量、ヘマトクリットが基準値より低値。中性脂肪が基準値より高値。"
+          },
+          {
+            "title": "胃カメラ・大腸カメラ（ポリープ除去）",
+            "images": [
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929370049-e7s5retoe8c.jpg",
+                "title": "2512大腸・胃カメラ_ふくだ代々木上原クリニック3"
+              },
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929370147-h0rcu9xf5oh.jpg",
+                "title": "2512大腸・胃カメラ_ふくだ代々木上原クリニック4"
+              }
+            ],
+            "content": "【胃内視鏡検査】\n\n医療機関: ふくだ代々木上原クリニック\n検査目的: ピロリ除菌後\n\n●診断：\n食道: 逆流性食道炎 (GERD) Grade M\n胃（萎縮度）: 萎縮性胃炎 C-1 Hp感染既往（びまん性発赤の消褪・軽減）\n十二指腸: 異常なし\n\n●コメント\n軽度の逆流性食道炎を認めます。\n萎縮性胃炎を認めますが、ピロリ除菌後ですので経過観察しましょう。\n一部びらんから生検しました（①）。\n\n\n【大腸内視鏡検査】\n医療機関: ふくだ代々木上原クリニック\n検査日: 2025年12月26日\n検査目的: 出血精査\n\n●診断\n横行結腸 (T): 腫瘍\n下行結腸 (D): 腫瘍\n肛門管 (P): 痔核\n\n●コメント\n横行結腸の5mmポリープ（①）、下行結腸の5mmポリープ（②）を切除しました。\n出血予防のため、クリップ2個ずつ留置しました。\n痔核は放置"
+          }
+        ],
+        "hospitalName": "ふくだ代々木上原クリニック"
+      },
+      "images": [
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929369865-wbqimezy8j.jpg",
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929369972-vcyeg4ldja9.jpg",
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929370049-e7s5retoe8c.jpg",
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929370147-h0rcu9xf5oh.jpg"
+      ],
+      "createdAt": "2026-01-20T17:16:10.319Z",
+      "updatedAt": "2026-01-20T17:16:10.319Z"
+    },
+    {
+      "id": "cmkmv60ih001ns61vu36y95g1",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "date": "2024-09-04T00:00:00.000Z",
+      "status": "verified",
+      "title": "ホルモン検査2024",
+      "summary": "遊離テストステロン低い／エストラジオール (女性ホルモン):低い\n",
+      "data": {
+        "results": [
+          {
+            "item": "ソマトメジン",
+            "unit": "ng/mL",
+            "value": 123,
+            "category": "Manual",
+            "evaluation": "良好です"
+          },
+          {
+            "item": "DHEA-S",
+            "unit": "μg/dL",
+            "value": 282,
+            "category": "Manual",
+            "evaluation": "やや低値です"
+          },
+          {
+            "item": "コルチゾール",
+            "unit": "μg/dL",
+            "value": 4.3,
+            "category": "Manual",
+            "evaluation": "良好です"
+          },
+          {
+            "item": "テストステロン",
+            "unit": "ng/mL",
+            "value": 5.82,
+            "category": "Manual",
+            "evaluation": "良好です"
+          },
+          {
+            "item": "遊離テストステロン",
+            "unit": "pg/mL",
+            "value": 8.8,
+            "category": "Manual",
+            "evaluation": "低値です (要注意)"
+          },
+          {
+            "item": "エストラジオール",
+            "unit": "pg/mL",
+            "value": 17,
+            "category": "Manual",
+            "evaluation": "やや低値です (要注意)"
+          },
+          {
+            "item": "卵胞刺激ホルモン",
+            "unit": "mIU/mL",
+            "value": 4.81,
+            "category": "Manual",
+            "evaluation": "良好です"
+          },
+          {
+            "item": "黄体形成ホルモン",
+            "unit": "mIU/mL",
+            "value": 2.22,
+            "category": "Manual",
+            "evaluation": "良好です"
+          },
+          {
+            "item": "甲状腺刺激ホルモン",
+            "unit": "μIU/mL",
+            "value": 0.572,
+            "category": "Manual",
+            "evaluation": "とても良好です"
+          },
+          {
+            "item": "遊離",
+            "unit": "pg/mL",
+            "value": 3.12,
+            "category": "Manual",
+            "evaluation": "良好です"
+          },
+          {
+            "item": "高感度",
+            "unit": "ng/mL",
+            "value": 0.656,
+            "category": "Manual",
+            "evaluation": "良好です"
+          }
+        ]
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "AI解析メモ",
+            "images": [
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929860942-25dr4k4fl6h.jpeg",
+                "title": "ホルモン検査2409_上符メディカルクリニック_01"
+              },
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929861154-3eue1tsje9w.jpeg",
+                "title": "ホルモン検査2409_上符メディカルクリニック_02"
+              }
+            ],
+            "content": "＜項目別評価（判定点 1〜5）＞\n■成長(修復)ホルモン (ソマトメジンC): 4点\n値: 123。良好です。このまま定期的な負荷運動を続けてください。目標250以上です。筋肉量、免疫機能、細胞再生に関連します。\n\n■DHEA-S (ホルモン年齢の基準): 3点\n値: 2820（※元データは282）。やや低値です。慢性疲労、記憶、免疫機能、精神作用、ストレス対応に関連します。目標値は3000-4500です。約50のホルモンに変化するため、「ホルモンの母」と言われています。体内年齢の指標です。\n\n■コルチゾール (ストレスホルモン): 5点\n値: 4.3。良好です。ストレス反応、DHEA-Sとの関連があります。3以上-7以下が目標です。細胞酸化を起こす可能性があります。\n\n■テストステロン (男性ホルモン総量): 4点\n値: 5.8。良好です。筋肉量、決断、判断力などにも影響がります。2.0-9.0が目標です。循環器機能にも関連しています。\n\n■遊離テストステロン (活性化男性ホルモン): 2点 (要注意)\n値: 8.8。低値です。14以上が目標です。男性ホルモンの活性化した量です。総テストステロンの3-4%が活性化をもちます。\n\n■エストラジオール (女性ホルモン): 2点 (要注意)\n値: 17。やや低値です。45-90が目標です。記憶力、語彙力に関連します。男性ではDHEAから変化します。\n\n■卵胞刺激ホルモン (FSH): 5点\n値: 4.8。良好です。主に精子形成に関連します。10以下が基準。\n\n■黄体形成ホルモン (LH): 5点\n値: 2.2。良好です。主に男性ホルモン量に関連します。10以下が基準。\n\n■甲状腺刺激ホルモン (TSH): 5点\n値: 0.5。とても良好です。4.0以下が基準。甲状腺機能をコントロールしています。\n\n■甲状腺ホルモン (FT3): 5点\n値: 3.1。良好です。3.0-4.0が目標。\n\n■高感度PSA: 5点\n値: 0.65。良好です。前立腺肥大、前立腺癌に関連しています。4.0以下が基準値です。\n\n＜総合評価コメント＞\n■成長ホルモンは標準値分泌されています。若々しさのkeyホルモンですのでぜひ持続させてください。\n■筋肉を使う定期的な運動負荷が必要です。目標は200-300です。\n■DHEA値はやや低値です。免疫機能、筋肉量、記憶力、性機能、慢性疲労症状などに関連しています。DHEAから男性ホルモン、女性ホルモンが変化します。DHEAの目標値は3000-4500です。症状を考慮して補充を考えましょう。\n■ストレスホルモンであるコルチゾールは良好です。\n■甲状腺ホルモン関連は甲状腺刺激ホルモン、甲状腺ホルモンも問題ありません。\n■総合男性ホルモンは良好です、遊離男性ホルモンは低値です。筋肉量、行動力、積極性などと関連してきます。\n■PSAは問題ありません。"
+          }
+        ],
+        "hospitalName": "銀座上符メディカルクリニック"
+      },
+      "images": [
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929860942-25dr4k4fl6h.jpeg",
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768929861154-3eue1tsje9w.jpeg"
+      ],
+      "createdAt": "2026-01-20T17:24:21.401Z",
+      "updatedAt": "2026-01-20T17:24:21.401Z"
+    },
+    {
+      "id": "cmkmvitav002es61vypskecv3",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "date": "2024-12-20T00:00:00.000Z",
+      "status": "verified",
+      "title": "無呼吸症候群検査2024",
+      "summary": "軽度の無呼吸症候群",
+      "data": {
+        "results": [
+          {
+            "item": "無呼吸低呼吸指数",
+            "unit": "回/h",
+            "value": 6.8,
+            "category": "Manual",
+            "evaluation": "軽症 (5〜15未満が軽症)"
+          },
+          {
+            "item": "仰臥位",
+            "unit": "回/h",
+            "value": 6.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "平均音量",
+            "unit": "dB",
+            "value": 41,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "平均血中酸素飽和度₂",
+            "unit": "%",
+            "value": 94,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "最低血中酸素飽和度₂",
+            "unit": "%",
+            "value": 57,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "酸素飽和度低下指数",
+            "unit": "回/h",
+            "value": 7.3,
+            "category": "Manual",
+            "evaluation": ""
+          }
+        ]
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "AI解析メモ",
+            "images": [],
+            "content": "診断: 睡眠時無呼吸症候群 軽症。2024年11月3日の簡易検査にてAHIが6.8回/hであった。本人はCPAP治療を希望しており、自己での治療は可能と判断。検査条件: 飲酒有り、鼻閉有り。"
+          }
+        ],
+        "hospitalName": "ワンクリニック恵比寿 (診断書発行), 渋谷睡眠・呼吸メディカルクリニック (検査実施)"
+      },
+      "images": [],
+      "createdAt": "2026-01-20T17:34:18.584Z",
+      "updatedAt": "2026-01-20T17:34:38.027Z"
+    },
+    {
+      "id": "cmkmvpxn9002hs61vq8q10r45",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "date": "2020-10-12T00:00:00.000Z",
+      "status": "verified",
+      "title": "虫歯・歯周病検査",
+      "summary": "",
+      "data": {
+        "results": []
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "虫歯診断",
+            "images": [
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768930790386-pnwi0rbucl.jpeg",
+                "title": "歯検査2010_新宿オークタワー歯科クリニック_01"
+              },
+              {
+                "url": "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768930790615-c8g2t37k9qw.jpeg",
+                "title": "歯検査2010_新宿オークタワー歯科クリニック_02"
+              }
+            ],
+            "content": "【ムシ歯診断書】\n\n＜上顎（左〜右）＞\n左奥歯（8, 7）に[C1]（エナメル質の虫歯）あり\n左（6, 5）に[In]（インレー/詰め物）あり\n右奥歯（8）に[C1]あり\n\n＜下顎（左〜右）＞\n左奥歯（8, 7）に[CR充]（詰め物）があり、×印（再発/治療必要）\n左（6）に[CO]（要観察歯）あり、注意マーク\n右（6, 7）に[C1]（エナメル質の虫歯）\n右奥歯（8）に[CR充]があり、×印（再発/治療必要）\n\n＜コメント・所見＞\n・×印がついた歯は、一度治し終えた歯にまたムシ歯ができています。また、治さなくてはなりません。\n・奥歯に9本ムシ歯があります。早く治療しましょう。\n・C1は極軽いムシ歯で、治療も簡単に済みます。\n\n【歯周診断書】\n\n＜診断内容（ポケット深さ Po）＞\n・全体的にポケットの深さが 3mm〜5mm の範囲で記録されています。\n・4mm〜5mm の箇所（グレー表示）が多数見受けられ、特に奥歯（臼歯部）に集中しています。\n・左上奥歯（8, 7, 6）: 4mm\n・右上奥歯（4〜7）: 4mm、（8）: 5mm\n・下顎も同様に奥歯を中心に4mm〜5mmの箇所あり。\n\n＜コメント・所見＞\n・歯のぐらつきはないようです。\n・ポケットの深い部分が見られます。歯ぐきの治療が必要です。\n・原因となる磨き残しや歯石を取り除き、歯の面や、根のまわりをきれいにするようにしましょう。"
+          }
+        ],
+        "hospitalName": "新宿オークタワー歯科クリニック"
+      },
+      "images": [
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768930790386-pnwi0rbucl.jpeg",
+        "http://localhost:54321/storage/v1/object/public/health-records/uploads/1768930790615-c8g2t37k9qw.jpeg"
+      ],
+      "createdAt": "2026-01-20T17:39:50.806Z",
+      "updatedAt": "2026-01-20T17:39:50.806Z"
+    }
+  ],
+  "lifestyleHabits": [],
+  "supplements": [
+    {
+      "id": "cmjudx9890009gzzd212ajk35",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "name": "ビタミンC",
+      "timing": [
+        "昼",
+        "夕"
+      ],
+      "order": 0,
+      "amount": "500",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2026-01-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:04:06.394Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjudw5xy0007gzzd4sfa5kqy",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "name": "CoQ10",
+      "timing": [
+        "昼",
+        "夕"
+      ],
+      "order": 1,
+      "amount": "250",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2025-01-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:03:15.479Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjudqlqv0001gzzd2x3bqiau",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "name": "EPA＋DHA",
+      "timing": [
+        "昼",
+        "夕"
+      ],
+      "order": 2,
+      "amount": "500",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2025-12-31T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T18:58:56.023Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjuds8kn0003gzzd6pjwdzxe",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "name": "ビタミンD",
+      "timing": [
+        "昼"
+      ],
+      "order": 3,
+      "amount": "25",
+      "unit": "mcg(1000IU)",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2025-07-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:00:12.263Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjudt04j0005gzzdc4vhxb3g",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "name": "ビタミンK2",
+      "timing": [
+        "昼"
+      ],
+      "order": 4,
+      "amount": "45",
+      "unit": "mcg",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2025-07-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:00:47.971Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjudyeq4000bgzzdxxb9g3nq",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "name": "メトホルミン",
+      "timing": [
+        "昼",
+        "夕"
+      ],
+      "order": 5,
+      "amount": "250",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "※大量飲酒時のまない",
+      "startDate": "2024-01-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:05:00.173Z",
+      "updatedAt": "2025-12-31T19:05:00.173Z"
+    },
+    {
+      "id": "cmjudzw91000dgzzdbhwxxj4o",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "name": "マグネシウム",
+      "timing": [
+        "夕"
+      ],
+      "order": 6,
+      "amount": "350",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "※グリシネート（吸収UP）",
+      "startDate": "2026-01-03T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:06:09.542Z",
+      "updatedAt": "2025-12-31T19:06:09.542Z"
+    },
+    {
+      "id": "cmjue1ebb000fgzzdg096hlaf",
+      "userId": "cmjza0kwa0002ln2aw259sgda",
+      "name": "ビタミンB1（チアミン）50mg",
+      "timing": [
+        "飲酒時"
+      ],
+      "order": 7,
+      "amount": "50",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "※余裕あればタウリン1000mgも",
+      "startDate": "2026-01-02T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:07:19.607Z",
+      "updatedAt": "2025-12-31T19:07:19.607Z"
+    }
+  ]
+}

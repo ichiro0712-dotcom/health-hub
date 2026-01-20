@@ -1,0 +1,363 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  birthDate     DateTime?
+  accounts      Account[]
+  sessions      Session[]
+  healthRecords HealthRecord[]
+  fitData       FitData[]
+  healthItemSettings UserHealthItemSetting[]
+  lifestyleHabits    LifestyleHabit[]
+  supplements        Supplement[]
+  inspectionItems    InspectionItem[]
+  healthProfileSections HealthProfileSection[]
+
+  // Fitbit Integration
+  fitbitAccount      FitbitAccount?
+  hrvData            HrvData[]
+  detailedSleep      DetailedSleep[]
+  intradayHeartRate  IntradayHeartRate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HealthRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  date        DateTime @default(now()) // Start date of validity or upload date
+  status      String   @default("pending") // pending, verified
+  title       String?  // Start date of validity or upload date
+  summary     String?  // Summary or key points of the record
+  
+  // Stores the extracted data. Flexible to accommodate various health check formats.
+  // Expected structure: { "bmi": 22.5, "bloodPressureHigh": 120, "items": [...] }
+  data        Json 
+
+  // Stores items explicitly identified as "additional" or not in the standard set
+  additional_data Json? 
+
+  // S3/Supabase Storage URLs
+  images      String[] 
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FitData {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime
+
+  heartRate Float? // Average or specific measurement
+  steps     Int?
+  weight    Float?
+
+  // Store raw JSON if we want more granular data later
+  raw       Json?
+
+  // Expanded Health Data
+  distance     Float? // meters
+  calories     Float? // kcal (active energy)
+  sleepMinutes Int?   // total sleep minutes
+  sleepData    Json?  // raw sleep sessions
+  vitals       Json?  // blood pressure, etc.
+  workouts     Json?  // workout logs
+
+  // Data Source Tracking (for Fitbit integration)
+  source           String?  // 'health_connect' | 'fitbit' | 'merged'
+  fitbitSyncId     String?  // Fitbit sync ID for deduplication
+  respiratoryRate  Float?   // breaths per minute
+  skinTemperature  Float?   // skin temperature variation
+
+  syncedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+model UserHealthItemSetting {
+  id        String   @id @default(cuid())
+  userId    String
+  itemName  String   // The exact name of the health item (e.g. "AST(GOT)")
+  
+  // Graph Normalization Settings
+  minVal    Float    @default(0)   // Graph 0%
+  maxVal    Float    @default(100) // Graph 100%
+  
+  // Medical Safe Range
+  safeMin   Float?
+  safeMax   Float?
+  
+  // Search Metadata
+  tags      String[] // e.g. ["Liver", "Alcohol"]
+  
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemName])
+}
+
+model LifestyleHabit {
+  id        String   @id @default(cuid())
+  userId    String
+
+  // Category: 'Preferences', 'Diet', 'Sleep', 'Exercise', 'Care'
+  category  String
+
+  // Name of the habit: 'Tobacco', 'Alcohol', etc.
+  name      String
+
+  // Stored as JSON to handle multipart values like { frequency: 5, amount: 20, unit: 'ml' }
+  value     Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, name]) // Prevent duplicate habit entries for same item
+}
+
+// 健康プロフィール - カテゴリ別フリーテキスト入力
+model HealthProfileSection {
+  id          String   @id @default(cuid())
+  userId      String
+
+  categoryId  String   // e.g., "basic_attributes", "genetics", "medical_history"
+  title       String   // カテゴリ表示名
+  content     String   @db.Text // フリーテキスト内容
+  orderIndex  Int      @default(0) // 表示順
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@index([userId])
+}
+
+model Supplement {
+  id           String   @id @default(cuid())
+  userId       String
+  
+  name         String
+  timing       String[]   // e.g. ["Morning", "Bedtime"]
+  order        Int      @default(0)
+  amount       String   // e.g. "1" (String to safely hold "1-2" etc)
+  unit         String   // e.g. "tablet", "mg"
+  manufacturer String?
+  note         String?
+  
+  startDate    DateTime? // When started taking
+  pausedPeriods Json?    // Array of {from: string, to: string | null}
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// --- Health Data Architecture v2.0 Models ---
+
+model InspectionItem {
+  id        String   @id @default(cuid()) // Persistent ID
+  userId    String
+  name      String   // Current Display Name
+  
+  masterItemCode String? // FK to MasterItem
+  masterItem     MasterItem? @relation(fields: [masterItemCode], references: [code])
+
+  aliases   InspectionItemAlias[]
+  history   InspectionItemHistory[]
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+}
+
+model InspectionItemAlias {
+  id               String   @id @default(cuid())
+  inspectionItemId String
+  originalName     String   // The name as it appears in the raw JSON
+
+  item             InspectionItem @relation(fields: [inspectionItemId], references: [id], onDelete: Cascade)
+  
+  @@unique([inspectionItemId, originalName])
+  @@index([originalName]) // Fast lookup for raw data mapping
+}
+
+model InspectionItemHistory {
+  id               String   @id @default(cuid())
+  inspectionItemId String
+  operationType    String   // "MERGE" | "SPLIT"
+  
+  details          Json     // { "mergedName": "TG", "targetId": "..." }
+  undoCommand      String   // Internal command string for restoration
+
+  createdAt        DateTime @default(now())
+
+  item             InspectionItem @relation(fields: [inspectionItemId], references: [id], onDelete: Cascade)
+}
+
+model MasterItem {
+  code         String   @id
+  standardName String   // 医療標準名称 (Standard Name)
+  jlac10       String?  // JLAC10コード
+  synonyms     String[] // シノニムリスト (自動名寄せ用)
+
+  inspectionItems InspectionItem[] // 紐付くユーザー項目
+}
+
+// =====================================================
+// Fitbit Integration Models
+// =====================================================
+
+// Fitbit OAuth Account Connection
+model FitbitAccount {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fitbitUserId  String   // Fitbit's user ID
+  accessToken   String   @db.Text
+  refreshToken  String   @db.Text
+  expiresAt     DateTime
+  scope         String   // Granted OAuth scopes
+  tokenType     String   @default("Bearer")
+
+  // PKCE State
+  codeVerifier  String?  @db.Text // Stored temporarily during OAuth flow
+
+  // Auto-sync tracking
+  lastSyncedAt  DateTime? // Last successful sync timestamp
+  initialSyncCompleted Boolean @default(false) // Whether full historical sync was done
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Heart Rate Variability (HRV) Data
+model HrvData {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date            DateTime @db.Date
+  dailyRmssd      Float    // Root Mean Square of Successive Differences (ms)
+  deepRmssd       Float?   // RMSSD during deep sleep
+  coverage        Float?   // Data coverage percentage (0-100)
+  lowFrequency    Float?   // Low frequency power (ms²)
+  highFrequency   Float?   // High frequency power (ms²)
+
+  raw             Json?    // Raw API response
+
+  syncedAt        DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+// Detailed Sleep Data with Stages
+model DetailedSleep {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date            DateTime @db.Date
+  logId           String   // Fitbit sleep log ID (for deduplication)
+
+  startTime       DateTime // Sleep start time
+  endTime         DateTime // Sleep end time
+  duration        Int      // Total sleep duration in minutes
+  efficiency      Int      // Sleep efficiency percentage (0-100)
+
+  // Sleep stage breakdown (in minutes)
+  minutesAwake    Int
+  minutesLight    Int
+  minutesDeep     Int
+  minutesRem      Int
+
+  // Detailed stage data (30-second intervals)
+  // Format: [{ dateTime: string, level: 'wake'|'light'|'deep'|'rem', seconds: number }]
+  stages          Json
+
+  raw             Json?    // Raw API response
+
+  syncedAt        DateTime @default(now())
+
+  @@unique([userId, logId])
+  @@index([userId, date])
+}
+
+// Intraday Heart Rate Data (per-second/minute granularity)
+model IntradayHeartRate {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date              DateTime @db.Date
+  restingHeartRate  Int?     // Resting heart rate for the day
+
+  // Heart rate zones (in minutes)
+  outOfRangeMinutes Int?
+  fatBurnMinutes    Int?
+  cardioMinutes     Int?
+  peakMinutes       Int?
+
+  // Intraday data points
+  // Format: [{ time: 'HH:mm:ss', value: number }]
+  intradayData      Json
+
+  raw               Json?    // Raw API response
+
+  syncedAt          DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Health Hub</string>
+    <string name="title_activity_main">Health Hub</string>
+    <string name="package_name">com.healthhub.app</string>
+    <string name="custom_url_scheme">com.healthhub.app</string>
+</resources>

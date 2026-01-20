@@ -1,0 +1,1590 @@
+{
+  "metadata": {
+    "timestamp": "2026-01-01T19:29:23.413Z",
+    "version": "1.0"
+  },
+  "users": [
+    {
+      "id": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ichiro",
+      "email": "test@example.com",
+      "emailVerified": null,
+      "image": "https://ui-avatars.com/api/?name=Test+User&background=random",
+      "birthDate": null,
+      "createdAt": "2025-12-31T16:16:14.120Z",
+      "updatedAt": "2025-12-31T16:16:14.120Z"
+    }
+  ],
+  "accounts": [],
+  "healthRecords": [
+    {
+      "id": "cmju80lka0001a2ppglj3b4ae",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "date": "2021-04-14T00:00:00.000Z",
+      "status": "verified",
+      "title": "人間ドック2021",
+      "summary": "ポリープ切除、動脈硬化、脂質代謝（C）、軽度の貧血傾向、痛風・尿酸（C）、「胃びらん」「表層性胃炎」",
+      "data": {
+        "results": [
+          {
+            "item": "身長 (Height)",
+            "unit": "cm",
+            "value": 185.7,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "体重 (Weight)",
+            "unit": "kg",
+            "value": 78.1,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "BMI",
+            "unit": "",
+            "value": 22.6,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "標準体重 (Standard Weight)",
+            "unit": "kg",
+            "value": 75.9,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "肥満度 (Degree of Obesity)",
+            "unit": "%",
+            "value": 2.9,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "腹囲 (Abdominal Circumference)",
+            "unit": "cm",
+            "value": 87,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "視力（矯正・右）(Corrected Vision - Right)",
+            "unit": "",
+            "value": 0.6,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "視力（矯正・左）(Corrected Vision - Left)",
+            "unit": "",
+            "value": 0.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "眼圧 (右) (Intraocular Pressure - Right)",
+            "unit": "mmHg",
+            "value": 15,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "眼圧 (左) (Intraocular Pressure - Left)",
+            "unit": "mmHg",
+            "value": 14,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "最高血圧 (Systolic BP)",
+            "unit": "mmHg",
+            "value": 104,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "最低血圧 (Diastolic BP)",
+            "unit": "mmHg",
+            "value": 60,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "聴力 (1000Hz) (Hearing)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "所見なし (Normal)"
+          },
+          {
+            "item": "聴力 (4000Hz) (Hearing)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "所見なし (Normal)"
+          },
+          {
+            "item": "尿比重 (Urine Specific Gravity)",
+            "unit": "",
+            "value": 1.006,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "白血球数 (WBC)",
+            "unit": "x100/μL",
+            "value": 59,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "赤血球数 (RBC)",
+            "unit": "x10,000/μL",
+            "value": 414,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "血色素量 (Hb)",
+            "unit": "g/dL",
+            "value": 12.9,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "ヘマトクリット (Hct)",
+            "unit": "%",
+            "value": 38.4,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "血小板数 (Platelet Count)",
+            "unit": "x10,000/μL",
+            "value": 22.3,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "総蛋白 (Total Protein)",
+            "unit": "g/dL",
+            "value": 6.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "アルブミン (Albumin)",
+            "unit": "g/dL",
+            "value": 4.6,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "A/G比 (A/G Ratio)",
+            "unit": "",
+            "value": 2.1,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "AST (GOT)",
+            "unit": "U/L",
+            "value": 16,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ALT (GPT)",
+            "unit": "U/L",
+            "value": 17,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "γ-GTP",
+            "unit": "U/L",
+            "value": 24,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ALP",
+            "unit": "U/L",
+            "value": 49,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "総ビリルビン (Total Bilirubin)",
+            "unit": "mg/dL",
+            "value": 0.8,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "LDH",
+            "unit": "U/L",
+            "value": 165,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "コリンエステラーゼ (Cholinesterase)",
+            "unit": "U/L",
+            "value": 307,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "血清アミラーゼ (Serum Amylase)",
+            "unit": "U/L",
+            "value": 69,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "尿素窒素 (BUN)",
+            "unit": "mg/dL",
+            "value": 14.2,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "クレアチニン (Creatinine)",
+            "unit": "mg/dL",
+            "value": 0.89,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "eGFR",
+            "unit": "",
+            "value": 75.4,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "尿酸 (Uric Acid)",
+            "unit": "mg/dL",
+            "value": 7.4,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "CRP",
+            "unit": "mg/dL",
+            "value": 0.01,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "リウマチ反応 (Rheumatoid Factor)",
+            "unit": "IU/ml",
+            "value": 0,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "総コレステロール (Total Cholesterol)",
+            "unit": "mg/dL",
+            "value": 227,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "HDLコレステロール (HDL Cholesterol)",
+            "unit": "mg/dL",
+            "value": 53,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "LDLコレステロール (LDL Cholesterol)",
+            "unit": "mg/dL",
+            "value": 153,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "non-HDLコレステロール (non-HDL Cholesterol)",
+            "unit": "mg/dL",
+            "value": 174,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "中性脂肪 (Triglycerides)",
+            "unit": "mg/dl",
+            "value": 107,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "空腹時血糖 (Fasting Blood Sugar)",
+            "unit": "mg/dL",
+            "value": 93,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "HbA1c (NGSP)",
+            "unit": "%",
+            "value": 5,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ペプシノゲン I (Pepsinogen I)",
+            "unit": "ng/mL",
+            "value": 70.1,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "ペプシノゲン I/II比 (Pepsinogen I/II Ratio)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "3.1以上"
+          },
+          {
+            "item": "便中ピロリ菌 (H. pylori in Stool)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-)"
+          },
+          {
+            "item": "PSA (前立腺) (Prostate)",
+            "unit": "ng/mL",
+            "value": 1.28,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "α-フェトプロテイン (肝) (AFP - Liver)",
+            "unit": "ng/mL",
+            "value": 4.3,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "CA19-9 (膵・胆道) (Pancreas/Biliary tract)",
+            "unit": "U/mL",
+            "value": 6.5,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "SCC (食道・肺) (Esophagus/Lung)",
+            "unit": "ng/mL",
+            "value": 1,
+            "category": "Manual",
+            "evaluation": ""
+          },
+          {
+            "item": "BFP (膀胱) (Bladder)",
+            "unit": "ng/mL",
+            "value": 37,
+            "category": "Manual",
+            "evaluation": ""
+          }
+        ]
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "AI解析メモ(人間ドック一般）",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197772968-2nqokskclw7.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_0２"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773198-coja0tbpka9.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_01"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773358-re2xw3dbua.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_03"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773520-fg4ghrp60rk.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_04"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773679-ev1gft2re0j.jpeg",
+                "title": "人間ドック2104_二子玉川メディカルクリニック_05"
+              }
+            ],
+            "content": "■総合判定と主要な所見\nいくつかの項目で「C（3ヶ月〜12ヶ月後の再検査・経過観察）」の判定が出ています。\n・脂質代謝（C）: 総コレステロール、LDLコレステロール（悪玉）が高めです。\n・血液一般（C）: 軽度の貧血傾向（血色素量、ヘマトクリットの低下）が見られます。\n・痛風・尿酸（C）: 尿酸値が基準をわずかに上回っています。\n・上部消化管（C）: 胃カメラで「胃びらん」「表層性胃炎」が認められました。\n・下部消化管（C）: 大腸カメラにてポリープを切除（良性の腺腫）。"
+          },
+          {
+            "title": "大腸ポリープ切除、動脈硬化（首）",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197773840-ger67lnofzk.jpeg",
+                "title": "大腸カメラ検査"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767197774002-q8nsyvvn3z7.jpeg",
+                "title": "動脈硬化（首）"
+              }
+            ],
+            "content": "■大腸ポリープ切除術\n診断医師: 伊井 和成\n\n■所見:\n・全大腸の観察を実施。\n・S状結腸に、6mm大のIs型ポリープが発見されました。\n\n■実施した処置:\n・コールドスネアポリペクトミーを施行し、ポリープを切除しました。\n・切除部位に対し、クリップを1個施行（止血・保護）しました。\n\n\n■首のエコー検査にて動脈硬化が認められる\n"
+          }
+        ],
+        "hospitalName": "二子玉川メディカルクリニック"
+      },
+      "images": [],
+      "createdAt": "2025-12-31T16:18:44.650Z",
+      "updatedAt": "2025-12-31T17:27:42.747Z"
+    },
+    {
+      "id": "cmju8ivjc0028m9jyg2tnlx20",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "date": "2024-10-03T00:00:00.000Z",
+      "status": "verified",
+      "title": "人間ドック2024",
+      "summary": "心電図 [判定C]*ST上昇（早期再分極の疑い）、軽度の貧血傾向、脂質代謝 [判定B]:",
+      "data": {
+        "results": [
+          {
+            "item": "Height (身長)",
+            "unit": "cm",
+            "value": 186.9,
+            "category": "Manual",
+            "evaluation": "-"
+          },
+          {
+            "item": "Weight (体重)",
+            "unit": "kg",
+            "value": 72.2,
+            "category": "Manual",
+            "evaluation": "-"
+          },
+          {
+            "item": "BMI",
+            "unit": "",
+            "value": 20.7,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Abdominal Circumference (腹囲)",
+            "unit": "cm",
+            "value": 79,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Systolic Blood Pressure (血圧（最高）)",
+            "unit": "mmHg",
+            "value": 100,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Diastolic Blood Pressure (血圧（最低）)",
+            "unit": "mmHg",
+            "value": 69,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Total Cholesterol (総コレステロール)",
+            "unit": "mg/dl",
+            "value": 207,
+            "category": "Manual",
+            "evaluation": "B"
+          },
+          {
+            "item": "HDL Cholesterol (HDLコレステロール)",
+            "unit": "mg/dl",
+            "value": 74,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "LDL Cholesterol (LDLコレステロール)",
+            "unit": "mg/dl",
+            "value": 121,
+            "category": "Manual",
+            "evaluation": "B"
+          },
+          {
+            "item": "Triglycerides (中性脂肪)",
+            "unit": "mg/dl",
+            "value": 40,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Fasting Blood Sugar (空腹時血糖)",
+            "unit": "mg/dl",
+            "value": 80,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "HbA1c (NGSP)",
+            "unit": "%",
+            "value": 5.2,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "AST (GOT)",
+            "unit": "U/L",
+            "value": 25,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "ALT (GPT)",
+            "unit": "U/L",
+            "value": 12,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "γ-GTP",
+            "unit": "U/L",
+            "value": 15,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Serum Amylase (血清アミラーゼ)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "Not Tested"
+          },
+          {
+            "item": "Urea Nitrogen (BUN) (尿素窒素)",
+            "unit": "mg/dl",
+            "value": 7.3,
+            "category": "Manual",
+            "evaluation": "B"
+          },
+          {
+            "item": "Creatinine (クレアチニン)",
+            "unit": "mg/dl",
+            "value": 0.91,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "eGFR",
+            "unit": "",
+            "value": 71.7,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Uric Acid (尿酸)",
+            "unit": "mg/dl",
+            "value": 6.9,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Urine Protein (尿蛋白)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-)"
+          },
+          {
+            "item": "Urine Sugar (尿糖)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-)"
+          },
+          {
+            "item": "Urine Occult Blood (尿潜血)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "(-)"
+          },
+          {
+            "item": "WBC (白血球数)",
+            "unit": "/μl",
+            "value": 3900,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "RBC (赤血球数)",
+            "unit": "万/μl",
+            "value": 401,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Hemoglobin (ヘモグロビン)",
+            "unit": "g/dl",
+            "value": 12.3,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "Hematocrit (ヘマトクリット)",
+            "unit": "%",
+            "value": 37.3,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "Platelets (血小板数)",
+            "unit": "万/μl",
+            "value": 25.5,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "CEA",
+            "unit": "ng/ml",
+            "value": 2.5,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "AFP",
+            "unit": "ng/ml",
+            "value": 4.2,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "CA19-9",
+            "unit": "U/ml",
+            "value": 5.3,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "CYFRA",
+            "unit": "ng/ml",
+            "value": 1,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "PSA",
+            "unit": "ng/ml",
+            "value": 0.64,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "HBs Antigen (HBs抗原)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "Negative"
+          },
+          {
+            "item": "HCV Antibody (HCV抗体)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "Negative"
+          },
+          {
+            "item": "Syphilis (梅毒)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "Negative"
+          },
+          {
+            "item": "Upper GI Endoscopy (胃カメラ)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "ECG (心電図)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "C"
+          },
+          {
+            "item": "Chest X-ray (胸部X線)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Abdominal Ultrasound (腹部超音波)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Colonoscopy (大腸内視鏡)",
+            "unit": "",
+            "value": null,
+            "category": "Manual",
+            "evaluation": "A"
+          },
+          {
+            "item": "Pepsinogen I (ペプシノゲン I)",
+            "unit": "ng/mL",
+            "value": 46.9,
+            "category": "Manual",
+            "evaluation": null
+          },
+          {
+            "item": "Pepsinogen II (ペプシノゲン II)",
+            "unit": "ng/mL",
+            "value": 7.1,
+            "category": "Manual",
+            "evaluation": null
+          },
+          {
+            "item": "Pepsinogen I/II Ratio (ペプシノゲン I/II比)",
+            "unit": null,
+            "value": 6.6,
+            "category": "Manual",
+            "evaluation": null
+          },
+          {
+            "item": "H. pylori Antibody (ヘリコバクター・ピロリ抗体)",
+            "unit": null,
+            "value": null,
+            "category": "Manual",
+            "evaluation": "（−）(陰性)"
+          }
+        ]
+      },
+      "additional_data": {
+        "sections": [
+          {
+            "title": "AI解析メモ（人間ドック一般）",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767198776598-gmnraje2apt.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_01"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767198776796-ndkhcso00f.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_02"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767198776971-pjdgydn837b.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_03"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767198777124-mhjynpck6td.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_14"
+              }
+            ],
+            "content": "■ 総合判定・重要ポイント\n今回の結果で注意が必要、または経過観察とされた主な点は以下の通りです。\n\n・消化器（胃カメラ）[判定C]:\n慢性萎縮性胃炎が認められます。ヘリコバクター・ピロリ菌の2次除菌後の判定が未完了の状態ですので、医師の指示に従い確認検査を受けてください。\n\n・心電図 [判定C]:\n**ST上昇（早期再分極の疑い）**が見られます。自覚症状がある場合は循環器内科の受診を検討してください。\n\n・血液一般（貧血指標）[判定C]:\nヘモグロビン（12.3）およびヘマトクリット（37.3）が基準値を下回っており、軽度の貧血傾向（判定C）です。\n\n・脂質代謝 [判定B]:\n総コレステロール（207）とLDLコレステロール（121）がわずかに基準値を超えていますが、日常生活に支障ない範囲（判定B）です。"
+          },
+          {
+            "title": "胃カメラ・大腸カメラ",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359299-3m8uf9vwkck.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_04"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359516-zmza2boblud.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_05"
+              }
+            ],
+            "content": "1. 大腸内視鏡検査の結果\n診断: 異常なしと診断されています。\n所見: 内容は「ほぼ正常（almost normal）」という評価です。\n\n2. 胃内視鏡検査の結果\n診断: ヘリコバクター・ピロリ菌の除菌後における「萎縮性胃炎」と診断されています。\n所見: 胃の萎縮の状態（C-II分類）が認められますが、これはピロリ菌除菌後の所見として記録されています。"
+          },
+          {
+            "title": "全身MRI・内臓脂肪測定結果・血液検査・感染症・がんリスク判定",
+            "images": [
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359672-if9x7k2hu4j.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_07"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359816-apicckzplim.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_08"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199359967-d5zejs6nnjc.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_09"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199360123-c5kdnq0omrt.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_10"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199360295-e6ya5rqftq.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_11"
+              },
+              {
+                "url": "http://127.0.0.1:54321/storage/v1/object/public/health-records/uploads/1767199360492-th5vicqeeud.jpeg",
+                "title": "人間ドック2410_新宿トミヒサクリニック_12"
+              }
+            ],
+            "content": "## 1. 全身CT検査・内臓脂肪測定結果\n画像診断およびCTによる体組成分析の結果です。\n\n* **全身CT所見**: 頭部、頸部、腹部（肝・胆・膵・脾・腎）、骨盤部（前立腺・膀胱）、脊椎のいずれも異常は認められませんでした。\n* **胸部所見**: 両肺尖部に「陳旧性炎症性変化（過去の炎症の跡）」が認められますが、治療の必要はないとの診断です。\n* **内臓脂肪**: 内臓脂肪面積は **44.5 ** であり、基準となる 100  を大幅に下回る「正常」判定です。\n* **BMI**: 21.4 と標準的な数値です。\n\n\n## 3. 血液検査・感染症・がんリスク判定\n詳細な血液分析およびリスク分類の結果です。\n\n* **胃がんリスク（ABC分類）**: 「A群」と判定されていますが、除菌経験がある場合は厳密には「E群（除菌群）」に該当し、定期的な検査が推奨される旨が記されています。\n* **ペプシノゲン**: PG I は 46.9 、I/II比は 6.6 です。\n* **腫瘍マーカー**: CEA(2.5)、AFP(4.2)、CA19-9(5.3)、シフラ(1.0以下)、PSA(0.639)のすべてが基準値内です。\n* **ウイルス検査**: B型肝炎（HBs抗原・抗体）、C型肝炎（HCV抗体）、HIV、梅毒のいずれも「陰性」です。\n* **貧血指標**: ヘモグロビン(12.3 )、ヘマトクリット(37.3 %)が基準値をわずかに下回っており、軽度の貧血傾向が示されています。"
+          }
+        ],
+        "hospitalName": "新宿トミヒサクロスクリニック"
+      },
+      "images": [],
+      "createdAt": "2025-12-31T16:32:57.384Z",
+      "updatedAt": "2025-12-31T17:27:42.752Z"
+    }
+  ],
+  "fitData": [
+    {
+      "id": "cmjv45qjg0001uo4xwiqf10j4",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "date": "2026-01-01T07:18:31.880Z",
+      "heartRate": 79,
+      "steps": 8378,
+      "weight": 65.63857900367853,
+      "raw": null,
+      "syncedAt": "2026-01-01T07:18:32.090Z"
+    },
+    {
+      "id": "cmjvsrqum0001hj3fscpb8xxb",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "date": "2026-01-01T15:00:00.000Z",
+      "heartRate": 61,
+      "steps": 487,
+      "weight": 0,
+      "raw": null,
+      "syncedAt": "2026-01-01T18:47:29.710Z"
+    }
+  ],
+  "supplements": [
+    {
+      "id": "cmjudx9890009gzzd212ajk35",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ビタミンC",
+      "timing": [
+        "昼",
+        "夕"
+      ],
+      "order": 0,
+      "amount": "500",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2026-01-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:04:06.394Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjudw5xy0007gzzd4sfa5kqy",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "CoQ10",
+      "timing": [
+        "昼",
+        "夕"
+      ],
+      "order": 1,
+      "amount": "250",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2025-01-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:03:15.479Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjudqlqv0001gzzd2x3bqiau",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "EPA＋DHA",
+      "timing": [
+        "昼",
+        "夕"
+      ],
+      "order": 2,
+      "amount": "500",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2025-12-31T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T18:58:56.023Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjuds8kn0003gzzd6pjwdzxe",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ビタミンD",
+      "timing": [
+        "昼"
+      ],
+      "order": 3,
+      "amount": "25",
+      "unit": "mcg(1000IU)",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2025-07-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:00:12.263Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjudt04j0005gzzdc4vhxb3g",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ビタミンK2",
+      "timing": [
+        "昼"
+      ],
+      "order": 4,
+      "amount": "45",
+      "unit": "mcg",
+      "manufacturer": "",
+      "note": "",
+      "startDate": "2025-07-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:00:47.971Z",
+      "updatedAt": "2025-12-31T19:04:14.976Z"
+    },
+    {
+      "id": "cmjudyeq4000bgzzdxxb9g3nq",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "メトホルミン",
+      "timing": [
+        "昼",
+        "夕"
+      ],
+      "order": 5,
+      "amount": "250",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "※大量飲酒時のまない",
+      "startDate": "2024-01-01T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:05:00.173Z",
+      "updatedAt": "2025-12-31T19:05:00.173Z"
+    },
+    {
+      "id": "cmjudzw91000dgzzdbhwxxj4o",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "マグネシウム",
+      "timing": [
+        "夕"
+      ],
+      "order": 6,
+      "amount": "350",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "※グリシネート（吸収UP）",
+      "startDate": "2026-01-03T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:06:09.542Z",
+      "updatedAt": "2025-12-31T19:06:09.542Z"
+    },
+    {
+      "id": "cmjue1ebb000fgzzdg096hlaf",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ビタミンB1（チアミン）50mg",
+      "timing": [
+        "飲酒時"
+      ],
+      "order": 7,
+      "amount": "50",
+      "unit": "mg",
+      "manufacturer": "",
+      "note": "※余裕あればタウリン1000mgも",
+      "startDate": "2026-01-02T00:00:00.000Z",
+      "pausedPeriods": [],
+      "createdAt": "2025-12-31T19:07:19.607Z",
+      "updatedAt": "2025-12-31T19:07:19.607Z"
+    }
+  ],
+  "habits": [],
+  "inspectionItems": [
+    {
+      "id": "cmju7xdfk0043bkupb7fq8fo4",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "視力（矯正・右）",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.145Z",
+      "updatedAt": "2025-12-31T17:15:00.200Z"
+    },
+    {
+      "id": "cmju7xdfm0045bkup3m3dcgek",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "視力（矯正・左）",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.146Z",
+      "updatedAt": "2025-12-31T17:15:00.203Z"
+    },
+    {
+      "id": "cmju7xdfe003vbkup2vgun1tw",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "BMI",
+      "masterItemCode": "bmi",
+      "createdAt": "2025-12-31T16:16:14.138Z",
+      "updatedAt": "2025-12-31T16:16:14.138Z"
+    },
+    {
+      "id": "cmju7xdfs004fbkup0259xtof",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "聴力",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.153Z",
+      "updatedAt": "2025-12-31T17:18:21.163Z"
+    },
+    {
+      "id": "cmju7xdfn0047bkupyz1b1ok5",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "眼圧 (右)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.148Z",
+      "updatedAt": "2025-12-31T17:19:07.117Z"
+    },
+    {
+      "id": "cmju7xdg80051bkupo3r8qk38",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "AST (GOT)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.168Z",
+      "updatedAt": "2025-12-31T16:16:14.168Z"
+    },
+    {
+      "id": "cmju7xdg90053bkupynywtrpu",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ALT (GPT)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.170Z",
+      "updatedAt": "2025-12-31T16:16:14.170Z"
+    },
+    {
+      "id": "cmju7xdgb0055bkupehc8vjlk",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "γ-GTP",
+      "masterItemCode": "gamma_gtp",
+      "createdAt": "2025-12-31T16:16:14.171Z",
+      "updatedAt": "2025-12-31T16:16:14.171Z"
+    },
+    {
+      "id": "cmju7xdgc0057bkuph0qknp62",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ALP",
+      "masterItemCode": "alp",
+      "createdAt": "2025-12-31T16:16:14.173Z",
+      "updatedAt": "2025-12-31T16:16:14.173Z"
+    },
+    {
+      "id": "cmju7xdfp0049bkupstcy1gq1",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "眼圧 (左)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.149Z",
+      "updatedAt": "2025-12-31T17:19:07.122Z"
+    },
+    {
+      "id": "cmju7xdge005bbkuppub3ydw7",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "LDH",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.175Z",
+      "updatedAt": "2025-12-31T16:16:14.175Z"
+    },
+    {
+      "id": "cmju7xdh5006dbkup7q8a2tlz",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "PSA (前立腺)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.202Z",
+      "updatedAt": "2025-12-31T17:19:07.125Z"
+    },
+    {
+      "id": "cmju7xdh7006fbkup3dopa4yo",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "α-フェトプロテイン (肝)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.203Z",
+      "updatedAt": "2025-12-31T17:19:07.127Z"
+    },
+    {
+      "id": "cmju7xdh8006hbkupuf9e4kgi",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "CA19-9 (膵・胆道)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.205Z",
+      "updatedAt": "2025-12-31T17:19:07.130Z"
+    },
+    {
+      "id": "cmju7xdhb006jbkupemdsl2r1",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "SCC (食道・肺)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.207Z",
+      "updatedAt": "2025-12-31T17:19:07.132Z"
+    },
+    {
+      "id": "cmju7xdgl005lbkup51yup6hz",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "eGFR",
+      "masterItemCode": "egfr",
+      "createdAt": "2025-12-31T16:16:14.181Z",
+      "updatedAt": "2025-12-31T16:16:14.181Z"
+    },
+    {
+      "id": "cmju7xdhc006lbkup9ov2j1ml",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "BFP (膀胱)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.208Z",
+      "updatedAt": "2025-12-31T17:19:07.134Z"
+    },
+    {
+      "id": "cmju7xdgn005pbkupbrvtxdx1",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "CRP",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.184Z",
+      "updatedAt": "2025-12-31T16:16:14.184Z"
+    },
+    {
+      "id": "cmju7xdh00065bkupi142u714",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "HbA1c (NGSP)",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.197Z",
+      "updatedAt": "2025-12-31T16:16:14.197Z"
+    },
+    {
+      "id": "cmju8ivhv0004m9jyje0ejovx",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "体重",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.332Z",
+      "updatedAt": "2025-12-31T16:56:18.319Z"
+    },
+    {
+      "id": "cmju8ivhy0006m9jyursuov9g",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "腹囲",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.334Z",
+      "updatedAt": "2025-12-31T16:56:18.322Z"
+    },
+    {
+      "id": "cmju8ivhz0008m9jydkxchdlv",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "血圧（最高）",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.336Z",
+      "updatedAt": "2025-12-31T16:56:18.324Z"
+    },
+    {
+      "id": "cmju8ivi1000am9jytqrsfrsg",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "血圧（最低）",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.337Z",
+      "updatedAt": "2025-12-31T16:56:18.327Z"
+    },
+    {
+      "id": "cmju8ivi2000cm9jyg5shgg9o",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "総コレステロール",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.339Z",
+      "updatedAt": "2025-12-31T16:56:18.329Z"
+    },
+    {
+      "id": "cmju8ivi4000em9jyayuc6fdx",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "HDLコレステロール",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.340Z",
+      "updatedAt": "2025-12-31T16:56:18.331Z"
+    },
+    {
+      "id": "cmju8ivi5000gm9jyuscv4dy4",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "LDLコレステロール",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.342Z",
+      "updatedAt": "2025-12-31T16:56:18.334Z"
+    },
+    {
+      "id": "cmju8ivi7000im9jylenm4d1n",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "中性脂肪",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.343Z",
+      "updatedAt": "2025-12-31T16:56:18.336Z"
+    },
+    {
+      "id": "cmju8ivi8000km9jy41g44tn4",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "空腹時血糖",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.345Z",
+      "updatedAt": "2025-12-31T16:56:18.338Z"
+    },
+    {
+      "id": "cmju8ivic000mm9jyj8vas39g",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "血清アミラーゼ",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.348Z",
+      "updatedAt": "2025-12-31T16:56:18.340Z"
+    },
+    {
+      "id": "cmju7xdfg003xbkupk1huuzp0",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "標準体重",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.140Z",
+      "updatedAt": "2025-12-31T17:11:23.149Z"
+    },
+    {
+      "id": "cmju7xdfh003zbkup80xtuqjo",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "肥満度",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.142Z",
+      "updatedAt": "2025-12-31T17:11:23.152Z"
+    },
+    {
+      "id": "cmju7xdfq004bbkup2g5n0plf",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "最高血圧",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.150Z",
+      "updatedAt": "2025-12-31T17:11:23.170Z"
+    },
+    {
+      "id": "cmju7xdfr004dbkupaj5rv371",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "最低血圧",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.151Z",
+      "updatedAt": "2025-12-31T17:11:23.172Z"
+    },
+    {
+      "id": "cmju7xdfv004jbkup9vcme17b",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "尿比重",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.156Z",
+      "updatedAt": "2025-12-31T17:11:23.176Z"
+    },
+    {
+      "id": "cmju7xdfz004pbkupvpxaqb0e",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "血色素量",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.159Z",
+      "updatedAt": "2025-12-31T17:11:23.184Z"
+    },
+    {
+      "id": "cmju7xdg3004vbkupc3dobpsh",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "総蛋白",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.163Z",
+      "updatedAt": "2025-12-31T17:11:23.192Z"
+    },
+    {
+      "id": "cmju7xdg5004xbkupmuks3m7y",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "アルブミン",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.166Z",
+      "updatedAt": "2025-12-31T17:11:23.193Z"
+    },
+    {
+      "id": "cmju7xdg7004zbkupbtlmbh99",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "A/G比",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.167Z",
+      "updatedAt": "2025-12-31T17:11:23.194Z"
+    },
+    {
+      "id": "cmju7xdgd0059bkup9d4p61l2",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "総ビリルビン",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.174Z",
+      "updatedAt": "2025-12-31T17:11:23.195Z"
+    },
+    {
+      "id": "cmju7xdgg005dbkupd5592heg",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "コリンエステラーゼ",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.176Z",
+      "updatedAt": "2025-12-31T17:11:23.197Z"
+    },
+    {
+      "id": "cmju7xdgp005rbkupw5d4vgjx",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "リウマチ反応",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.186Z",
+      "updatedAt": "2025-12-31T17:11:23.208Z"
+    },
+    {
+      "id": "cmju7xdgv005zbkupku04rqef",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "non-HDLコレステロール",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.191Z",
+      "updatedAt": "2025-12-31T17:11:23.217Z"
+    },
+    {
+      "id": "cmju7xdh4006bbkuprbssdj4f",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "便中ピロリ菌",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:16:14.200Z",
+      "updatedAt": "2025-12-31T17:11:23.228Z"
+    },
+    {
+      "id": "cmju8ivir001am9jyfclg47lv",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "CEA",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.364Z",
+      "updatedAt": "2025-12-31T16:32:57.364Z"
+    },
+    {
+      "id": "cmju8ivis001cm9jywemb9nop",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "AFP",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.365Z",
+      "updatedAt": "2025-12-31T16:32:57.365Z"
+    },
+    {
+      "id": "cmju8ivit001em9jy0dpik56x",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "CA19-9",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.366Z",
+      "updatedAt": "2025-12-31T16:32:57.366Z"
+    },
+    {
+      "id": "cmju8iviv001gm9jymvfdeqsr",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "CYFRA",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.367Z",
+      "updatedAt": "2025-12-31T16:32:57.367Z"
+    },
+    {
+      "id": "cmju8iviw001im9jy3o0tsohu",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "PSA",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.368Z",
+      "updatedAt": "2025-12-31T16:32:57.368Z"
+    },
+    {
+      "id": "cmju8ivht0002m9jyxn1ik21i",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "身長",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.329Z",
+      "updatedAt": "2025-12-31T16:56:18.313Z"
+    },
+    {
+      "id": "cmju8ivid000om9jytuyooyus",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "尿素窒素",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.350Z",
+      "updatedAt": "2025-12-31T16:56:18.343Z"
+    },
+    {
+      "id": "cmju8ivif000qm9jy4b3m91nn",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "クレアチニン",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.351Z",
+      "updatedAt": "2025-12-31T16:56:18.344Z"
+    },
+    {
+      "id": "cmju8ivig000sm9jy2yocyly7",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "尿酸",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.353Z",
+      "updatedAt": "2025-12-31T16:56:18.346Z"
+    },
+    {
+      "id": "cmju8ivih000um9jyua5u4ux3",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "尿蛋白",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.354Z",
+      "updatedAt": "2025-12-31T16:56:18.349Z"
+    },
+    {
+      "id": "cmju8ivij000wm9jyqujhzln6",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "尿糖",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.355Z",
+      "updatedAt": "2025-12-31T16:56:18.350Z"
+    },
+    {
+      "id": "cmju8ivik000ym9jym7wliz85",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "尿潜血",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.356Z",
+      "updatedAt": "2025-12-31T16:56:18.352Z"
+    },
+    {
+      "id": "cmju8ivil0010m9jyrqh4wu0q",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "白血球数",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.358Z",
+      "updatedAt": "2025-12-31T16:56:18.354Z"
+    },
+    {
+      "id": "cmju8ivin0012m9jyef1y8pzw",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "赤血球数",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.359Z",
+      "updatedAt": "2025-12-31T16:56:18.355Z"
+    },
+    {
+      "id": "cmju8ivio0014m9jy5tv2ovwd",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ヘモグロビン",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.360Z",
+      "updatedAt": "2025-12-31T16:56:18.356Z"
+    },
+    {
+      "id": "cmju8ivip0016m9jyapggvhev",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ヘマトクリット",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.361Z",
+      "updatedAt": "2025-12-31T16:56:18.357Z"
+    },
+    {
+      "id": "cmju8iviq0018m9jyh96envdx",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "血小板数",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.362Z",
+      "updatedAt": "2025-12-31T16:56:18.359Z"
+    },
+    {
+      "id": "cmju8ivix001km9jyqy67kpd3",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "HBs抗原",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.369Z",
+      "updatedAt": "2025-12-31T16:56:18.360Z"
+    },
+    {
+      "id": "cmju8iviy001mm9jyj6yeoy9v",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "HCV抗体",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.371Z",
+      "updatedAt": "2025-12-31T16:56:18.361Z"
+    },
+    {
+      "id": "cmju8iviz001om9jyyfo45wht",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "梅毒",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.372Z",
+      "updatedAt": "2025-12-31T16:56:18.362Z"
+    },
+    {
+      "id": "cmju8ivj0001qm9jyyglugfji",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "胃カメラ",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.373Z",
+      "updatedAt": "2025-12-31T16:56:18.363Z"
+    },
+    {
+      "id": "cmju8ivj1001sm9jyfwwvi3v1",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "心電図",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.374Z",
+      "updatedAt": "2025-12-31T16:56:18.365Z"
+    },
+    {
+      "id": "cmju8ivj3001um9jy7ag30x81",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "胸部X線",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.375Z",
+      "updatedAt": "2025-12-31T16:56:18.366Z"
+    },
+    {
+      "id": "cmju8ivj4001wm9jy0rgudu5e",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "腹部超音波",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.376Z",
+      "updatedAt": "2025-12-31T16:56:18.367Z"
+    },
+    {
+      "id": "cmju8ivj5001ym9jyfx8uazz9",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "大腸内視鏡",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.378Z",
+      "updatedAt": "2025-12-31T16:56:18.368Z"
+    },
+    {
+      "id": "cmju8ivj60020m9jyhdx5lthz",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ペプシノゲン I",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.379Z",
+      "updatedAt": "2025-12-31T16:56:18.370Z"
+    },
+    {
+      "id": "cmju8ivj70022m9jybv4o4mhd",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ペプシノゲン II",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.380Z",
+      "updatedAt": "2025-12-31T16:56:18.371Z"
+    },
+    {
+      "id": "cmju8ivj80024m9jyx1mijoff",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ペプシノゲン I/II比",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.381Z",
+      "updatedAt": "2025-12-31T16:56:18.372Z"
+    },
+    {
+      "id": "cmju8ivja0026m9jyym7wfx84",
+      "userId": "cmju7xdf4003pbkuphrwwvoor",
+      "name": "ヘリコバクター・ピロリ抗体",
+      "masterItemCode": null,
+      "createdAt": "2025-12-31T16:32:57.383Z",
+      "updatedAt": "2025-12-31T16:56:18.374Z"
+    }
+  ],
+  "userSettings": []
+}

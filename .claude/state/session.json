@@ -1,0 +1,25 @@
+{
+  "session_id": "5D5D39E8-5CA7-4CF9-8AB3-6CCF032650C5",
+  "started_at": "2026-01-07T08:40:08Z",
+  "cwd": "/Users/kawashimaichirou/Desktop/バイブコーディング/ヘルヘルス",
+  "project_name": "ヘルヘルス",
+  "prompt_seq": 4,
+  "git": {
+    "branch": "main",
+    "uncommitted_changes": 36,
+    "last_commit": "5201723"
+  },
+  "plans": {
+    "exists": false,
+    "last_modified": 0,
+    "wip_tasks": 0,
+    "todo_tasks": 0,
+    "pending_tasks": 0,
+    "completed_tasks": 0
+  },
+  "changes_this_session": [],
+  "intent": "literal",
+  "ended_at": "2026-01-07T08:42:01Z",
+  "duration_minutes": 541,
+  "memory_logged": true
+}
