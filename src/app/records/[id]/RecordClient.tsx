@@ -9,9 +9,11 @@ import { showErrorToast } from '@/components/ErrorToast';
 import HealthRecordModal from '@/components/HealthRecordModal';
 import { HealthRecordData, SectionItem } from '@/components/HealthRecordForm';
 import { format } from 'date-fns';
+import { useDataCache, CACHE_KEYS } from '@/contexts/DataCacheContext';
 
 export default function RecordClient({ record, mappings = {} }: { record: any, mappings?: Record<string, string> }) {
     const router = useRouter();
+    const { invalidateCache } = useDataCache();
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
@@ -114,6 +116,8 @@ export default function RecordClient({ record, mappings = {} }: { record: any, m
     const handleUpdate = async (data: any) => {
         const res = await updateRecord(record.id, data);
         if (res.success) {
+            // Invalidate trends cache since record data changed
+            invalidateCache(CACHE_KEYS.TRENDS_DATA);
             toast.success("保存しました");
             router.push('/records');
         }
@@ -124,6 +128,8 @@ export default function RecordClient({ record, mappings = {} }: { record: any, m
         if (confirm('この記録を完全に削除しますか？\n※この操作は取り消せません。')) {
             const res = await deleteRecord(record.id);
             if (res.success) {
+                // Invalidate trends cache since record was deleted
+                invalidateCache(CACHE_KEYS.TRENDS_DATA);
                 toast.success('削除しました');
                 router.push('/');
             } else {

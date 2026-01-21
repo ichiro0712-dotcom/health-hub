@@ -5,11 +5,15 @@ import Header from "@/components/Header";
 import HealthRecordForm from "@/components/HealthRecordForm";
 import { Toaster } from 'react-hot-toast';
 import { saveHealthRecord } from '@/app/actions/health-record';
+import { useDataCache, CACHE_KEYS } from '@/contexts/DataCacheContext';
 
 export default function ImportPage() {
     const router = useRouter();
+    const { invalidateCache } = useDataCache();
 
     const handleSuccess = () => {
+        // Invalidate trends cache since new record was added
+        invalidateCache(CACHE_KEYS.TRENDS_DATA);
         router.push('/records');
     };
 

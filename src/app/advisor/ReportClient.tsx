@@ -148,8 +148,8 @@ export default function ReportClient() {
     return (
         <div className="max-w-4xl mx-auto px-4 py-8">
             {/* ヘッダー */}
-            <div className="flex items-center justify-between mb-8">
-                <div>
+            <div className="mb-6">
+                <div className="mb-4">
                     <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
                         健康レポート
                     </h1>
@@ -157,23 +157,24 @@ export default function ReportClient() {
                         健康プロフィールと診断記録を基にした分析結果
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                {/* モバイル：縦並び、PC：横並び */}
+                <div className="flex flex-col sm:flex-row gap-2">
                     <button
                         onClick={handleAnalyze}
                         disabled={isAnalyzing}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 px-4 py-3 sm:py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white rounded-xl sm:rounded-lg font-medium transition-colors disabled:opacity-50 flex-1 sm:flex-initial"
                     >
                         {isAnalyzing ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                             <RefreshCw className="w-4 h-4" />
                         )}
-                        再診断
+                        {isAnalyzing ? '診断中...' : '再診断'}
                     </button>
                     <button
                         onClick={handleExportAll}
                         disabled={isExporting}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-medium transition-colors disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 px-4 py-3 sm:py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl sm:rounded-lg font-medium transition-colors disabled:opacity-50 flex-1 sm:flex-initial"
                     >
                         {isExporting ? (
                             <Loader2 className="w-4 h-4 animate-spin" />

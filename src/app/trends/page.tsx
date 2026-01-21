@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { getTrendsData, TrendRecord } from "@/app/actions/trends"; // Use unified data action
 import { getUserItemSettings } from '@/app/actions/settings';
+import { useDataCache, CACHE_KEYS } from '@/contexts/DataCacheContext';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea
 } from 'recharts';
@@ -30,7 +31,15 @@ interface ItemSetting {
     description?: string;
 }
 
+interface CachedTrendsData {
+    records: TrendRecord[];
+    settings: Record<string, ItemSetting>;
+    selectedItems: string[];
+}
+
 export default function TrendsPage() {
+    const { getCachedData, setCachedData, isCacheValid, cacheVersion } = useDataCache();
+
     const [viewMode, setViewMode] = useState<'table' | 'graph'>('table');
     const [listTab, setListTab] = useState<'hospital' | 'smartphone'>('hospital'); // New Tab State
     const [records, setRecords] = useState<TrendRecord[]>([]);
@@ -54,25 +63,44 @@ export default function TrendsPage() {
 
     useEffect(() => {
         const loadData = async () => {
+            // Check if we have cached data
+            const cachedData = getCachedData<CachedTrendsData>(CACHE_KEYS.TRENDS_DATA);
+
+            if (cachedData) {
+                // Use cached data immediately
+                setRecords(cachedData.records);
+                setSettings(cachedData.settings);
+                setSelectedItems(cachedData.selectedItems);
+                setIsLoading(false);
+                return;
+            }
+
+            // No cache, fetch from server
             setIsLoading(true);
             const [trendsRes, settingsRes] = await Promise.all([
                 getTrendsData(),
                 getUserItemSettings()
             ]);
 
+            let newRecords: TrendRecord[] = [];
+            let newSettings: Record<string, ItemSetting> = {};
+            let newSelectedItems: string[] = [];
+
             if (trendsRes.success && trendsRes.records) {
-                setRecords(trendsRes.records);
+                newRecords = trendsRes.records;
+                setRecords(newRecords);
 
                 // Set initial graph selection
                 // Prioritize finding weight/steps/hba1c
                 const allKeys = trendsRes.availableKeys || [];
-                const initialSelection = [];
+                const initialSelection: string[] = [];
                 if (allKeys.includes('体重')) initialSelection.push('体重');
                 if (allKeys.includes('HbA1c')) initialSelection.push('HbA1c');
                 if (initialSelection.length === 0) {
                     initialSelection.push(...allKeys.slice(0, 3));
                 }
-                setSelectedItems(initialSelection);
+                newSelectedItems = initialSelection;
+                setSelectedItems(newSelectedItems);
             } else {
                 toast.error('データの取得に失敗しました');
             }
@@ -95,12 +123,23 @@ export default function TrendsPage() {
                         sMap[userSetting.itemName] = userSetting;
                     }
                 });
-                setSettings(sMap);
+                newSettings = sMap;
+                setSettings(newSettings);
             }
+
+            // Cache the data for future use
+            if (newRecords.length > 0) {
+                setCachedData<CachedTrendsData>(CACHE_KEYS.TRENDS_DATA, {
+                    records: newRecords,
+                    settings: newSettings,
+                    selectedItems: newSelectedItems,
+                });
+            }
+
             setIsLoading(false);
         };
         loadData();
-    }, []);
+    }, [cacheVersion, getCachedData, setCachedData]);
 
     // Helper: Get all unique items from RECORDS (sorted by category)
     const allItems = Array.from(new Set(records.flatMap(r => Object.keys(r.items)))).sort(compareItemsByCategory);

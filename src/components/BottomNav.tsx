@@ -11,17 +11,17 @@ export default function BottomNav() {
 
     const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/');
 
-    // メインメニュー（4つ）
+    // メインメニュー（4つ + その他）
     const mainItems = [
-        { href: '/', icon: Home, label: 'ホーム', exact: true },
         { href: '/trends', icon: BarChart2, label: '推移' },
         { href: '/habits', icon: Activity, label: '健康プロフ' },
         { href: '/advisor', icon: MessageSquare, label: 'レポート' },
+        { href: '/records', icon: FileText, label: '診断記録' },
     ];
 
     // その他メニュー
     const moreItems = [
-        { href: '/records', icon: FileText, label: '診断記録' },
+        { href: '/', icon: Home, label: 'ホーム', exact: true },
         { href: '/smartphone', icon: Smartphone, label: 'スマホ連携' },
         { href: '/dna', icon: Dna, label: 'DNA' },
         { href: '/profile', icon: Menu, label: '設定' },
@@ -73,9 +73,7 @@ export default function BottomNav() {
                 <div className="flex justify-around items-center h-[60px] px-2">
                     {mainItems.map((item) => {
                         const Icon = item.icon;
-                        const active = item.exact
-                            ? pathname === item.href
-                            : isActive(item.href);
+                        const active = isActive(item.href);
                         return (
                             <Link
                                 key={item.href}
@@ -98,7 +96,7 @@ export default function BottomNav() {
                     <button
                         onClick={() => setShowMore(!showMore)}
                         className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-xl transition-all min-w-[60px] ${
-                            showMore || isActive('/records') || isActive('/smartphone') || isActive('/dna') || isActive('/profile') || isActive('/settings')
+                            showMore || pathname === '/' || isActive('/smartphone') || isActive('/dna') || isActive('/profile') || isActive('/settings')
                                 ? 'text-teal-600 dark:text-teal-400'
                                 : 'text-slate-400 dark:text-slate-500 active:text-slate-600 dark:active:text-slate-300'
                         }`}

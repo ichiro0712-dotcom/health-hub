@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Capacitor } from '@capacitor/core';
 import { checkAndSyncHealthConnect } from "@/lib/mobile-sync";
 import Link from 'next/link';
+import { useDataCache, CACHE_KEYS } from '@/contexts/DataCacheContext';
 import {
     Smartphone,
     Watch,
@@ -44,6 +45,7 @@ function SmartphoneClientContent() {
     const { data: session, status: authStatus } = useSession();
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { invalidateCache } = useDataCache();
 
     // Platform detection
     const [isNative, setIsNative] = useState(false);
@@ -125,6 +127,8 @@ function SmartphoneClientContent() {
         try {
             const success = await checkAndSyncHealthConnect();
             if (success) {
+                // Invalidate trends cache since smartphone data was synced
+                invalidateCache(CACHE_KEYS.TRENDS_DATA);
                 setMessage({ type: 'success', text: 'Health Connectと同期しました' });
                 router.refresh();
             }
@@ -188,6 +192,8 @@ function SmartphoneClientContent() {
             setFitbitSyncResult(data);
 
             if (data.success) {
+                // Invalidate trends cache since Fitbit data was synced
+                invalidateCache(CACHE_KEYS.TRENDS_DATA);
                 setMessage({ type: 'success', text: 'Fitbitデータを同期しました' });
                 fetchFitbitStatus();
             } else {
