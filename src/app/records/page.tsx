@@ -4,17 +4,25 @@ import { Calendar, FileText, ArrowRight, Activity, Plus } from 'lucide-react';
 import Header from '@/components/Header';
 import RecordsCopyButton from '@/components/RecordsCopyButton';
 import { format } from 'date-fns';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = 'force-dynamic';
 
 export default async function RecordsPage() {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        redirect("/");
+    }
+
     const { success, data: records } = await getRecords();
 
     if (!success || !records) {
         return (
             <div className="min-h-screen pb-24 md:pb-8">
                 <Header />
-                <div className="p-8 text-center text-red-500">記事の取得に失敗しました</div>
+                <div className="p-8 text-center text-red-500">記録の取得に失敗しました</div>
             </div>
         );
     }

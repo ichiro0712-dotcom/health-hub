@@ -238,9 +238,17 @@ export default function HealthProfileClient({ initialSections }: Props) {
                                     }`}
                             >
                                 {/* カテゴリヘッダー */}
-                                <button
+                                <div
+                                    className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors rounded-xl cursor-pointer"
                                     onClick={() => toggleSection(section.categoryId)}
-                                    className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            toggleSection(section.categoryId);
+                                        }
+                                    }}
                                 >
                                     <div className="flex items-center gap-3">
                                         <span className={`font-bold ${hasContent ? 'text-slate-800 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}>
@@ -270,7 +278,7 @@ export default function HealthProfileClient({ initialSections }: Props) {
                                             <ChevronDown className="w-5 h-5 text-slate-400" />
                                         )}
                                     </div>
-                                </button>
+                                </div>
 
                                 {/* 編集エリア */}
                                 {isExpanded && (

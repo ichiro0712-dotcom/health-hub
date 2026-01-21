@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, Upload, BarChart2, MessageSquare, Settings, LogOut, User as UserIcon, FileText, Dna, Smartphone } from "lucide-react";
-import LoginButton from "./LoginButton";
-import MobileSyncButton from "./MobileSyncButton";
 import { useSession, signOut } from "next-auth/react";
 
 export default function Header() {
@@ -57,13 +55,9 @@ export default function Header() {
 
                 {/* Right Side Actions */}
                 <div className="flex items-center gap-4">
-                    {!session ? (
-                        <LoginButton />
-                    ) : (
+                    {session && (
                         <div className="flex items-center gap-4">
-                            <MobileSyncButton />
-
-                            {/* Profile Dropdown Trigger (Simplified for now) */}
+                            {/* Profile Dropdown Trigger */}
                             <div className="relative group">
                                 <Link href="/profile" className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full border border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 transition bg-white dark:bg-slate-800">
                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 px-2 max-w-[100px] truncate">
