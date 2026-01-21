@@ -1,7 +1,6 @@
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -24,6 +23,7 @@ model User {
   supplements        Supplement[]
   inspectionItems    InspectionItem[]
   healthProfileSections HealthProfileSection[]
+  googleDocsSettings GoogleDocsSettings?
 
   // Fitbit Integration
   fitbitAccount      FitbitAccount?
@@ -360,4 +360,25 @@ model IntradayHeartRate {
 
   @@unique([userId, date])
   @@index([userId, date])
+}
+
+// Google Docs連携設定
+model GoogleDocsSettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 記録データ用ドキュメント
+  recordsDocId          String?  // Google Docs ID
+  recordsHeaderText     String?  @db.Text // 冒頭に挿入するテキスト
+
+  // 健康プロフィール用ドキュメント
+  profileDocId          String?  // Google Docs ID
+  profileHeaderText     String?  @db.Text // 冒頭に挿入するテキスト
+
+  // 同期設定
+  autoSyncEnabled       Boolean  @default(true)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }

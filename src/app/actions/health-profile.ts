@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { DEFAULT_PROFILE_CATEGORIES, HealthProfileSectionData } from "@/constants/health-profile";
+import { syncHealthProfileToGoogleDocs } from "@/lib/google-docs";
 
 // ユーザーIDを取得するヘルパー
 async function getUserId(): Promise<string | null> {
@@ -138,6 +139,11 @@ export async function saveAllHealthProfileSections(
                 })
             )
         );
+
+        // Google Docsに自動同期（バックグラウンドで実行、エラーは無視）
+        syncHealthProfileToGoogleDocs(sections).catch(err => {
+            console.error('Google Docs sync failed:', err);
+        });
 
         return { success: true };
     } catch (error) {

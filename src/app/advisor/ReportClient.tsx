@@ -157,20 +157,34 @@ export default function ReportClient() {
                         健康プロフィールと診断記録を基にした分析結果
                     </p>
                 </div>
-                <button
-                    onClick={handleExportAll}
-                    disabled={isExporting}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-medium transition-colors disabled:opacity-50"
-                >
-                    {isExporting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : copied ? (
-                        <Check className="w-4 h-4 text-emerald-500" />
-                    ) : (
-                        <Copy className="w-4 h-4" />
-                    )}
-                    {copied ? 'コピー完了' : '全データ出力'}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleAnalyze}
+                        disabled={isAnalyzing}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                        {isAnalyzing ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <RefreshCw className="w-4 h-4" />
+                        )}
+                        再診断
+                    </button>
+                    <button
+                        onClick={handleExportAll}
+                        disabled={isExporting}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                        {isExporting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : copied ? (
+                            <Check className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                            <Copy className="w-4 h-4" />
+                        )}
+                        {copied ? 'コピー完了' : '全データ出力'}
+                    </button>
+                </div>
             </div>
 
             {/* エラー表示 */}
@@ -458,7 +472,7 @@ export default function ReportClient() {
                 ) : (
                     <>
                         <RefreshCw className="w-5 h-5" />
-                        {analysis ? '再診断する' : '診断を実行'}
+                        {analysis ? '再診断' : '診断を実行'}
                     </>
                 )}
             </button>

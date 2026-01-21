@@ -4,8 +4,32 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { PrismaClient } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { syncRecordsToGoogleDocs } from "@/lib/google-docs";
 
 const prisma = new PrismaClient();
+
+// Google Docsに記録を同期するヘルパー関数
+async function syncRecordsInBackground(userEmail: string) {
+    try {
+        const records = await prisma.healthRecord.findMany({
+            where: {
+                user: { email: userEmail }
+            },
+            orderBy: { date: 'desc' },
+            select: {
+                id: true,
+                date: true,
+                title: true,
+                summary: true,
+                data: true,
+                additional_data: true
+            }
+        });
+        await syncRecordsToGoogleDocs(records);
+    } catch (err) {
+        console.error('Google Docs sync failed:', err);
+    }
+}
 
 export async function getRecords() {
     const session = await getServerSession(authOptions);
@@ -62,6 +86,10 @@ export async function deleteRecord(id: string) {
         }
 
         await prisma.healthRecord.delete({ where: { id } });
+
+        // Google Docsに自動同期（バックグラウンド）
+        syncRecordsInBackground(session.user.email);
+
         return { success: true };
     } catch (error) {
         return { success: false, error: "Failed to delete" };
@@ -97,6 +125,10 @@ export async function updateRecord(id: string, data: any) {
         });
         revalidatePath('/records');
         revalidatePath(`/records/${id}`);
+
+        // Google Docsに自動同期（バックグラウンド）
+        syncRecordsInBackground(session.user.email);
+
         return { success: true };
     } catch (error) {
         return { success: false, error: "Update failed" };

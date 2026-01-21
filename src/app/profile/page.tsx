@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 import ProfileForm from './ProfileForm';
 
 import Link from 'next/link';
-import { Merge, Dna, Smartphone } from 'lucide-react';
+import { Merge, Dna, Smartphone, FileText } from 'lucide-react';
 
 import Header from '@/components/Header';
 
@@ -85,6 +85,20 @@ export default async function ProfilePage() {
                                 <div>
                                     <div className="font-bold text-sm text-gray-900 dark:text-gray-100">スマホデータ連携</div>
                                     <div className="text-xs text-gray-500 dark:text-gray-400">Health Connect・Fitbitと同期</div>
+                                </div>
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6" /></svg>
+                        </Link>
+
+                        {/* Google Docs Sync Settings */}
+                        <Link href="/settings/google-docs" className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                    <FileText className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <div className="font-bold text-sm text-gray-900 dark:text-gray-100">Google Docs連携</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">データの自動同期設定</div>
                                 </div>
                             </div>
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6" /></svg>

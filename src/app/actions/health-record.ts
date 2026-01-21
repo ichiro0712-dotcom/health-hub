@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizeItemName, getStandardizedItemName } from "./items";
+import { syncRecordsToGoogleDocs } from "@/lib/google-docs";
 
 // const prisma = new PrismaClient(); // Removed local instance
 
@@ -110,6 +111,17 @@ export async function saveHealthRecord(data: HealthRecordInput) {
                 additional_data: data.meta || {},
                 images: data.images || []
             }
+        });
+
+        // Google Docsに自動同期（バックグラウンドで実行、エラーは無視）
+        prisma.healthRecord.findMany({
+            where: { userId: user.id },
+            orderBy: { date: 'desc' },
+            select: { id: true, date: true, title: true, summary: true, data: true, additional_data: true }
+        }).then(records => {
+            syncRecordsToGoogleDocs(records).catch(err => {
+                console.error('Google Docs sync failed:', err);
+            });
         });
 
         return { success: true };
