@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Capacitor } from '@capacitor/core';
@@ -40,7 +40,7 @@ interface SyncResult {
     errors: Array<{ type: string; message: string }>;
 }
 
-export default function SmartphoneClient() {
+function SmartphoneClientContent() {
     const { data: session, status: authStatus } = useSession();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -471,5 +471,17 @@ export default function SmartphoneClient() {
                 ※ 同期したデータは「推移」画面で確認できます
             </p>
         </div>
+    );
+}
+
+export default function SmartphoneClient() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+            </div>
+        }>
+            <SmartphoneClientContent />
+        </Suspense>
     );
 }

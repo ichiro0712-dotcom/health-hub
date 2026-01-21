@@ -280,6 +280,7 @@ export interface ValidationResult {
 export interface ValidationError {
   table: string;
   field?: string;
+  recordId?: string;
   message: string;
 }
 

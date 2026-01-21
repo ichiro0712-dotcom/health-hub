@@ -5,6 +5,11 @@
  */
 
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+
+// Prisma JSON型に変換するヘルパー
+const toJson = (value: unknown): Prisma.InputJsonValue =>
+  JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 import {
   getActivitySummary,
   getHeartRate,
@@ -190,8 +195,8 @@ async function syncHeartRateData(
               fatBurnMinutes: dayData.heartRateZones.find(z => z.name === 'Fat Burn')?.minutes || 0,
               cardioMinutes: dayData.heartRateZones.find(z => z.name === 'Cardio')?.minutes || 0,
               peakMinutes: dayData.heartRateZones.find(z => z.name === 'Peak')?.minutes || 0,
-              intradayData: hrData['activities-heart-intraday'].dataset,
-              raw: hrData,
+              intradayData: toJson(hrData['activities-heart-intraday'].dataset),
+              raw: toJson(hrData),
               syncedAt: new Date(),
             },
             create: {
@@ -202,8 +207,8 @@ async function syncHeartRateData(
               fatBurnMinutes: dayData.heartRateZones.find(z => z.name === 'Fat Burn')?.minutes || 0,
               cardioMinutes: dayData.heartRateZones.find(z => z.name === 'Cardio')?.minutes || 0,
               peakMinutes: dayData.heartRateZones.find(z => z.name === 'Peak')?.minutes || 0,
-              intradayData: hrData['activities-heart-intraday'].dataset,
-              raw: hrData,
+              intradayData: toJson(hrData['activities-heart-intraday'].dataset),
+              raw: toJson(hrData),
             },
           });
         }
@@ -257,7 +262,7 @@ async function syncHrvData(
         update: {
           dailyRmssd: hrv.value.dailyRmssd,
           deepRmssd: hrv.value.deepRmssd || null,
-          raw: hrv,
+          raw: toJson(hrv),
           syncedAt: new Date(),
         },
         create: {
@@ -265,7 +270,7 @@ async function syncHrvData(
           date: dateOnly,
           dailyRmssd: hrv.value.dailyRmssd,
           deepRmssd: hrv.value.deepRmssd || null,
-          raw: hrv,
+          raw: toJson(hrv),
         },
       });
     }
@@ -304,8 +309,8 @@ async function syncSleepData(
           minutesLight: getSleepStageMinutes(sleep, 'light'),
           minutesDeep: getSleepStageMinutes(sleep, 'deep'),
           minutesRem: getSleepStageMinutes(sleep, 'rem'),
-          stages: sleep.levels.data,
-          raw: sleep,
+          stages: toJson(sleep.levels.data),
+          raw: toJson(sleep),
           syncedAt: new Date(),
         },
         create: {
@@ -320,8 +325,8 @@ async function syncSleepData(
           minutesLight: getSleepStageMinutes(sleep, 'light'),
           minutesDeep: getSleepStageMinutes(sleep, 'deep'),
           minutesRem: getSleepStageMinutes(sleep, 'rem'),
-          stages: sleep.levels.data,
-          raw: sleep,
+          stages: toJson(sleep.levels.data),
+          raw: toJson(sleep),
         },
       });
 
@@ -333,7 +338,7 @@ async function syncSleepData(
           },
           update: {
             sleepMinutes: sleep.minutesAsleep,
-            sleepData: sleep,
+            sleepData: toJson(sleep),
             source: 'fitbit',
             syncedAt: new Date(),
           },
@@ -341,7 +346,7 @@ async function syncSleepData(
             userId,
             date: dateOnly,
             sleepMinutes: sleep.minutesAsleep,
-            sleepData: sleep,
+            sleepData: toJson(sleep),
             source: 'fitbit',
           },
         });

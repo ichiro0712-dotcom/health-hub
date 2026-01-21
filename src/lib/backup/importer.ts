@@ -3,6 +3,14 @@
  */
 
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+
+// JSON フィールド用のヘルパー関数
+function toJsonValue(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined {
+  if (value === null) return Prisma.JsonNull;
+  if (value === undefined) return undefined;
+  return value as Prisma.InputJsonValue;
+}
 import {
   BackupFile,
   ImportOptions,
@@ -335,13 +343,13 @@ async function upsertFitData(tx: TxClient, record: Record<string, unknown>, mode
       heartRate: record.heartRate as number | null,
       steps: record.steps as number | null,
       weight: record.weight as number | null,
-      raw: record.raw as object | null,
+      raw: toJsonValue(record.raw),
       distance: record.distance as number | null,
       calories: record.calories as number | null,
       sleepMinutes: record.sleepMinutes as number | null,
-      sleepData: record.sleepData as object | null,
-      vitals: record.vitals as object | null,
-      workouts: record.workouts as object | null,
+      sleepData: toJsonValue(record.sleepData),
+      vitals: toJsonValue(record.vitals),
+      workouts: toJsonValue(record.workouts),
       syncedAt: new Date(record.syncedAt as string),
     } : {},
     create: {
@@ -351,13 +359,13 @@ async function upsertFitData(tx: TxClient, record: Record<string, unknown>, mode
       heartRate: record.heartRate as number | null,
       steps: record.steps as number | null,
       weight: record.weight as number | null,
-      raw: record.raw as object | null,
+      raw: toJsonValue(record.raw),
       distance: record.distance as number | null,
       calories: record.calories as number | null,
       sleepMinutes: record.sleepMinutes as number | null,
-      sleepData: record.sleepData as object | null,
-      vitals: record.vitals as object | null,
-      workouts: record.workouts as object | null,
+      sleepData: toJsonValue(record.sleepData),
+      vitals: toJsonValue(record.vitals),
+      workouts: toJsonValue(record.workouts),
       syncedAt: new Date(record.syncedAt as string),
     },
   });
@@ -376,8 +384,8 @@ async function upsertHealthRecord(tx: TxClient, record: Record<string, unknown>,
       status: record.status as string,
       title: record.title as string | null,
       summary: record.summary as string | null,
-      data: record.data as object,
-      additional_data: record.additional_data as object | null,
+      data: toJsonValue(record.data) ?? {},
+      additional_data: toJsonValue(record.additional_data),
       images: record.images as string[],
     } : {},
     create: {
@@ -387,8 +395,8 @@ async function upsertHealthRecord(tx: TxClient, record: Record<string, unknown>,
       status: record.status as string,
       title: record.title as string | null,
       summary: record.summary as string | null,
-      data: record.data as object,
-      additional_data: record.additional_data as object | null,
+      data: toJsonValue(record.data) ?? {},
+      additional_data: toJsonValue(record.additional_data),
       images: record.images as string[] || [],
     },
   });
@@ -486,7 +494,7 @@ async function upsertSupplement(tx: TxClient, record: Record<string, unknown>, m
       manufacturer: record.manufacturer as string | null,
       note: record.note as string | null,
       startDate: record.startDate ? new Date(record.startDate as string) : null,
-      pausedPeriods: record.pausedPeriods as object | null,
+      pausedPeriods: toJsonValue(record.pausedPeriods),
     } : {},
     create: {
       id: record.id as string,
@@ -499,7 +507,7 @@ async function upsertSupplement(tx: TxClient, record: Record<string, unknown>, m
       manufacturer: record.manufacturer as string | null,
       note: record.note as string | null,
       startDate: record.startDate ? new Date(record.startDate as string) : null,
-      pausedPeriods: record.pausedPeriods as object | null,
+      pausedPeriods: toJsonValue(record.pausedPeriods),
     },
   });
   return true;

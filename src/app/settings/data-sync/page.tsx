@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Capacitor } from '@capacitor/core';
 import { checkAndSyncHealthConnect } from "@/lib/mobile-sync";
-import toast from "react-hot-toast";
 import Header from '@/components/Header';
 import {
   Activity,
@@ -41,7 +40,7 @@ interface SyncResult {
   errors: Array<{ type: string; message: string }>;
 }
 
-export default function DataSyncPage() {
+function DataSyncContent() {
   const { data: session, status: authStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -457,5 +456,17 @@ export default function DataSyncPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function DataSyncPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+      </div>
+    }>
+      <DataSyncContent />
+    </Suspense>
   );
 }

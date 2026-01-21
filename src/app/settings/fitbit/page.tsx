@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -34,7 +34,7 @@ interface SyncResult {
   errors: Array<{ type: string; message: string }>;
 }
 
-export default function FitbitSettingsPage() {
+function FitbitSettingsContent() {
   const { data: session, status: authStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -455,5 +455,17 @@ export default function FitbitSettingsPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function FitbitSettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+      </div>
+    }>
+      <FitbitSettingsContent />
+    </Suspense>
   );
 }
