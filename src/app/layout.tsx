@@ -20,6 +20,16 @@ export const metadata: Metadata = {
   title: "Health Hub",
   description: "あなたの健康を見える化",
   viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Health Hub",
+  },
 };
 
 import BottomNav from "@/components/BottomNav";
