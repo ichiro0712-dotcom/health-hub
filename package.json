@@ -7,7 +7,9 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "use-prod-db": "bash scripts/use-prod-db.sh",
+    "use-local-db": "bash scripts/use-local-db.sh"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
