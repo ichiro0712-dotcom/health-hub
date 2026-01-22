@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 
 interface CacheEntry<T> {
     data: T;
@@ -33,48 +33,97 @@ export const CACHE_KEYS = {
     ADVISOR_REPORT: 'advisor_report',
 } as const;
 
+const CACHE_PREFIX = 'health_hub_cache_';
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes TTL
+
 interface DataCacheProviderProps {
     children: ReactNode;
 }
 
+// Helper functions for sessionStorage
+function getFromStorage<T>(key: string): CacheEntry<T> | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const item = sessionStorage.getItem(CACHE_PREFIX + key);
+        if (!item) return null;
+        const entry = JSON.parse(item) as CacheEntry<T>;
+        // Check TTL
+        if (Date.now() - entry.timestamp > CACHE_TTL) {
+            sessionStorage.removeItem(CACHE_PREFIX + key);
+            return null;
+        }
+        return entry;
+    } catch {
+        return null;
+    }
+}
+
+function setToStorage<T>(key: string, data: T): void {
+    if (typeof window === 'undefined') return;
+    try {
+        const entry: CacheEntry<T> = {
+            data,
+            timestamp: Date.now(),
+        };
+        sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
+    } catch {
+        // Storage full or other error, silently fail
+    }
+}
+
+function removeFromStorage(key: string): void {
+    if (typeof window === 'undefined') return;
+    sessionStorage.removeItem(CACHE_PREFIX + key);
+}
+
+function clearAllStorage(): void {
+    if (typeof window === 'undefined') return;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith(CACHE_PREFIX)) {
+            keysToRemove.push(key);
+        }
+    }
+    keysToRemove.forEach(key => sessionStorage.removeItem(key));
+}
+
 export function DataCacheProvider({ children }: DataCacheProviderProps) {
-    const [cache, setCache] = useState<Map<string, CacheEntry<unknown>>>(new Map());
     const [cacheVersion, setCacheVersion] = useState(0);
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
 
     const getCachedData = useCallback(<T,>(key: string): T | null => {
-        const entry = cache.get(key);
+        if (!isClient) return null;
+        const entry = getFromStorage<T>(key);
         if (!entry) return null;
-        return entry.data as T;
-    }, [cache]);
+        return entry.data;
+    }, [isClient]);
 
     const setCachedData = useCallback(<T,>(key: string, data: T): void => {
-        setCache(prev => {
-            const newCache = new Map(prev);
-            newCache.set(key, {
-                data,
-                timestamp: Date.now(),
-            });
-            return newCache;
-        });
-    }, []);
+        if (!isClient) return;
+        setToStorage(key, data);
+    }, [isClient]);
 
     const invalidateCache = useCallback((key: string): void => {
-        setCache(prev => {
-            const newCache = new Map(prev);
-            newCache.delete(key);
-            return newCache;
-        });
+        if (!isClient) return;
+        removeFromStorage(key);
         setCacheVersion(v => v + 1);
-    }, []);
+    }, [isClient]);
 
     const invalidateAllCaches = useCallback((): void => {
-        setCache(new Map());
+        if (!isClient) return;
+        clearAllStorage();
         setCacheVersion(v => v + 1);
-    }, []);
+    }, [isClient]);
 
     const isCacheValid = useCallback((key: string): boolean => {
-        return cache.has(key);
-    }, [cache]);
+        if (!isClient) return false;
+        return getFromStorage(key) !== null;
+    }, [isClient]);
 
     return (
         <DataCacheContext.Provider

@@ -27,9 +27,10 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "Health Hub",
   },
+  themeColor: "#0f172a",
 };
 
 import BottomNav from "@/components/BottomNav";
