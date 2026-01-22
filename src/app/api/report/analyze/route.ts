@@ -5,18 +5,19 @@ import { getStructuredDataForAnalysis } from '@/app/actions/report';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
-// 健康カテゴリの定義（ランク順）
+// 健康カテゴリの定義（ランク順）- 全カテゴリ平均50点基準
 const HEALTH_CATEGORIES = [
     { id: 'risk_factors', name: 'リスク因子', rank: 'SS', avgScore: 50 },
     { id: 'diet_nutrition', name: '食習慣・栄養', rank: 'SS', avgScore: 50 },
-    { id: 'sleep_recovery', name: '睡眠・リカバリー', rank: 'S', avgScore: 55 },
-    { id: 'cardiovascular', name: '循環器・血管', rank: 'S', avgScore: 55 },
-    { id: 'physical_activity', name: '運動・身体機能', rank: 'A', avgScore: 45 },
+    { id: 'sleep_recovery', name: '睡眠・リカバリー', rank: 'S', avgScore: 50 },
+    { id: 'cardiovascular', name: '循環器・血管', rank: 'S', avgScore: 50 },
+    { id: 'physical_activity', name: '運動・身体機能', rank: 'A', avgScore: 50 },
     { id: 'health_consciousness', name: '健康意識・受診行動', rank: 'A', avgScore: 50 },
-    { id: 'brain_mental', name: '脳・メンタル', rank: 'B', avgScore: 55 },
+    { id: 'anti_aging', name: '抗老化', rank: 'A', avgScore: 50 },
+    { id: 'brain_mental', name: '脳・メンタル', rank: 'B', avgScore: 50 },
     { id: 'metabolism', name: '代謝・燃焼', rank: 'B', avgScore: 50 },
-    { id: 'digestion_gut', name: '消化器・吸収', rank: 'C', avgScore: 55 },
-    { id: 'immunity_barrier', name: '免疫・バリア', rank: 'C', avgScore: 55 },
+    { id: 'digestion_gut', name: '消化器・吸収', rank: 'C', avgScore: 50 },
+    { id: 'immunity_barrier', name: '免疫・バリア', rank: 'C', avgScore: 50 },
 ];
 
 interface CategoryScore {
@@ -46,7 +47,7 @@ interface AnalysisResult {
 
 async function callGeminiAPI(prompt: string): Promise<string> {
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GOOGLE_API_KEY}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -180,18 +181,21 @@ ${recordsText || '（データなし）'}
 6. **健康意識・受診行動 (health_consciousness)**
    自身の身体への関心度と医療へのアクセス頻度。定期的な健康診断の受診、不調時の早期受診、専門家のアドバイスを受け入れる姿勢。
 
+7. **抗老化 (anti_aging)**
+   細胞レベルの老化進行度と抗老化対策の実施状況。酸化ストレス・糖化・慢性炎症の管理、抗酸化物質やNMN等の摂取、肌・髪・外見の若々しさ。生物学的年齢と暦年齢の乖離を評価。
+
 ### B（標準）
-7. **脳・メンタル (brain_mental)**
+8. **脳・メンタル (brain_mental)**
    認知機能の維持とストレス耐性。社会的活動や幸福感に関わり、長期的なQOLと自立生活の可否を決定。
 
-8. **代謝・燃焼 (metabolism)**
+9. **代謝・燃焼 (metabolism)**
    エネルギーの処理能力とホルモンバランス。糖尿病予備軍のリスクや基礎代謝量など。
 
 ### C（基礎・補足）
-9. **消化器・吸収 (digestion_gut)**
-   栄養素の吸収効率と腸内環境。腸は「第二の脳」とも呼ばれ、免疫力やメンタルにも影響。
+10. **消化器・吸収 (digestion_gut)**
+    栄養素の吸収効率と腸内環境。腸は「第二の脳」とも呼ばれ、免疫力やメンタルにも影響。
 
-10. **免疫・バリア (immunity_barrier)**
+11. **免疫・バリア (immunity_barrier)**
     外部環境からの防御機能。皮膚や粘膜の健康状態を含み、感染症リスクや外見的な若々しさに影響。
 
 ## 回答形式
@@ -207,6 +211,7 @@ ${recordsText || '（データなし）'}
     { "id": "cardiovascular", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
     { "id": "physical_activity", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
     { "id": "health_consciousness", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
+    { "id": "anti_aging", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
     { "id": "brain_mental", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
     { "id": "metabolism", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
     { "id": "digestion_gut", "score": <0-100>, "reasoning": "<50字程度の根拠>" },

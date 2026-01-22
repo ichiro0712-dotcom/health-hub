@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import {
-    Heart, Save, Plus, Copy, ChevronDown, ChevronUp, Trash2, Check, Loader2
+    Activity, Save, Plus, Copy, ChevronDown, ChevronUp, Trash2, Check, Loader2
 } from 'lucide-react';
 import Header from '@/components/Header';
 import { toast } from 'sonner';
@@ -168,7 +168,7 @@ export default function HealthProfileClient({ initialSections }: Props) {
                     <div className="flex items-center justify-between">
                         <div>
                             <h1 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                <Heart className="w-5 h-5 text-rose-500" />
+                                <Activity className="w-5 h-5 text-teal-500" />
                                 健康プロフ
                             </h1>
                             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">

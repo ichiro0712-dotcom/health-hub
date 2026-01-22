@@ -36,7 +36,7 @@ export default async function RecordsPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
                             <FileText className="w-6 h-6 text-teal-500" />
-                            病院データ
+                            診断記録
                         </h1>
                         <p className="text-sm text-slate-500 dark:text-slate-400">健康診断や検査結果の履歴を管理します</p>
                     </div>

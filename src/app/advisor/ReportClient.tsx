@@ -126,12 +126,24 @@ export default function ReportClient() {
         return 'text-red-500';
     };
 
-    const getBarColor = (score: number, avgScore: number) => {
-        const diff = score - avgScore;
-        if (diff >= 10) return 'bg-emerald-500';
-        if (diff >= 0) return 'bg-teal-500';
-        if (diff >= -10) return 'bg-yellow-500';
+    // 偏差値を計算（-10〜+10の範囲）
+    const getDeviation = (score: number, avgScore: number) => {
+        const deviation = (score - avgScore) / 5;
+        return Math.max(-10, Math.min(10, deviation));
+    };
+
+    // 偏差値の色を取得
+    const getDeviationColor = (deviation: number) => {
+        if (deviation >= 4) return 'bg-emerald-500';
+        if (deviation >= 0) return 'bg-teal-500';
+        if (deviation >= -4) return 'bg-yellow-500';
         return 'bg-red-500';
+    };
+
+    // 偏差値の表示テキスト
+    const formatDeviation = (deviation: number) => {
+        const rounded = Math.round(deviation * 10) / 10;
+        return rounded >= 0 ? `+${rounded}` : `${rounded}`;
     };
 
     const formatDate = (isoString: string) => {
@@ -151,7 +163,7 @@ export default function ReportClient() {
             <div className="mb-6">
                 <div className="mb-4">
                     <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                        健康レポート
+                        Healthレポート
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
                         健康プロフィールと診断記録を基にした分析結果
@@ -276,46 +288,62 @@ export default function ReportClient() {
                     カテゴリ別スコア
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                    同年代平均（縦線）との比較
+                    同年代平均との比較（中央が平均、右が+、左が-）
                 </p>
 
                 <div className="space-y-4">
                     {analysis ? (
-                        analysis.categories.map((cat) => (
-                            <div key={cat.id} className="space-y-1">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${getRankColor(cat.rank)}`}>
-                                            {cat.rank}
+                        analysis.categories.map((cat) => {
+                            const deviation = getDeviation(cat.score, cat.avgScore);
+                            const barWidth = Math.abs(deviation) * 5; // 最大50%（片側）
+                            const isPositive = deviation >= 0;
+
+                            return (
+                                <div key={cat.id} className="space-y-1">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${getRankColor(cat.rank)}`}>
+                                                {cat.rank}
+                                            </span>
+                                            {cat.name}
                                         </span>
-                                        {cat.name}
-                                    </span>
-                                    <span className={`font-medium ${getScoreColor(cat.score)}`}>
-                                        {cat.score}点
-                                        <span className="text-xs text-slate-400 dark:text-slate-500 ml-1">
-                                            (平均{cat.avgScore})
+                                        <span className={`font-medium ${deviation >= 0 ? 'text-emerald-500' : deviation >= -4 ? 'text-yellow-500' : 'text-red-500'}`}>
+                                            {formatDeviation(deviation)}
                                         </span>
-                                    </span>
+                                    </div>
+                                    <div className="relative h-5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        {/* 中央線（平均） */}
+                                        <div className="absolute top-0 left-1/2 h-full w-0.5 bg-slate-400 dark:bg-slate-500 z-10" />
+
+                                        {/* 偏差バー */}
+                                        {isPositive ? (
+                                            // プラス：中央から右へ
+                                            <div
+                                                className={`absolute top-0 h-full rounded-r-full transition-all duration-500 ${getDeviationColor(deviation)}`}
+                                                style={{
+                                                    left: '50%',
+                                                    width: `${barWidth}%`
+                                                }}
+                                            />
+                                        ) : (
+                                            // マイナス：中央から左へ
+                                            <div
+                                                className={`absolute top-0 h-full rounded-l-full transition-all duration-500 ${getDeviationColor(deviation)}`}
+                                                style={{
+                                                    right: '50%',
+                                                    width: `${barWidth}%`
+                                                }}
+                                            />
+                                        )}
+                                    </div>
+                                    {cat.reasoning && (
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 pl-2 border-l-2 border-slate-200 dark:border-slate-600">
+                                            {cat.reasoning}
+                                        </p>
+                                    )}
                                 </div>
-                                <div className="relative h-5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                    {/* ユーザーのスコアバー */}
-                                    <div
-                                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${getBarColor(cat.score, cat.avgScore)}`}
-                                        style={{ width: `${cat.score}%` }}
-                                    />
-                                    {/* 平均マーカー */}
-                                    <div
-                                        className="absolute top-0 h-full w-0.5 bg-slate-800 dark:bg-white opacity-60"
-                                        style={{ left: `${cat.avgScore}%` }}
-                                    />
-                                </div>
-                                {cat.reasoning && (
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 pl-2 border-l-2 border-slate-200 dark:border-slate-600">
-                                        {cat.reasoning}
-                                    </p>
-                                )}
-                            </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <div className="text-slate-400 dark:text-slate-500 text-center py-8">
                             診断を実行するとカテゴリ別スコアが表示されます
@@ -325,22 +353,17 @@ export default function ReportClient() {
 
                 {analysis && (
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center gap-1">
-                            <div className="w-3 h-0.5 bg-slate-800 dark:bg-white opacity-60" />
-                            <span>同年代平均</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-slate-600 dark:text-slate-300">-10</span>
+                            <div className="flex items-center h-3 w-24">
+                                <div className="h-full w-1/2 bg-gradient-to-r from-red-500 via-yellow-500 to-slate-300 dark:to-slate-600 rounded-l-full" />
+                                <div className="h-full w-0.5 bg-slate-400" />
+                                <div className="h-full w-1/2 bg-gradient-to-r from-slate-300 dark:from-slate-600 via-teal-500 to-emerald-500 rounded-r-full" />
+                            </div>
+                            <span className="text-slate-600 dark:text-slate-300">+10</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                            <span>平均以上</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                            <span>やや低い</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded-full bg-red-500" />
-                            <span>要改善</span>
-                        </div>
+                        <span className="text-slate-400">|</span>
+                        <span>中央線 = 同年代平均</span>
                     </div>
                 )}
             </div>
@@ -458,25 +481,6 @@ export default function ReportClient() {
                     </div>
                 </div>
             )}
-
-            {/* 再診断ボタン */}
-            <button
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
-                className="w-full py-4 px-4 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-teal-500/25"
-            >
-                {isAnalyzing ? (
-                    <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        診断中...（1分ほどかかります）
-                    </>
-                ) : (
-                    <>
-                        <RefreshCw className="w-5 h-5" />
-                        {analysis ? '再診断' : '診断を実行'}
-                    </>
-                )}
-            </button>
 
             {/* 注意書き */}
             <p className="text-xs text-slate-400 dark:text-slate-500 text-center mt-4">
