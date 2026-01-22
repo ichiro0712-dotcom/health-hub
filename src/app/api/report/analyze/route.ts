@@ -63,21 +63,30 @@ async function callGeminiAPI(prompt: string): Promise<string> {
 
     if (!response.ok) {
         const errorText = await response.text();
-        console.error('Gemini API error:', errorText);
+        console.error('Gemini API error response:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorText
+        });
         let errorMessage = 'AI分析に失敗しました';
         try {
             const errorData = JSON.parse(errorText);
             if (errorData.error?.message) {
                 errorMessage = `AI API エラー: ${errorData.error.message}`;
             }
-        } catch {
-            // ignore
+            console.error('Parsed error:', errorData);
+        } catch (e) {
+            console.error('Failed to parse error response:', e);
         }
         throw new Error(errorMessage);
     }
 
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!data.candidates || data.candidates.length === 0) {
+        console.error('No candidates in response:', data);
+        throw new Error('AI応答が空でした');
+    }
+    return data.candidates[0]?.content?.parts?.[0]?.text || '';
 }
 
 export async function POST(req: NextRequest) {
