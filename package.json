@@ -8,6 +8,7 @@
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
+    "setup-prod": "bash scripts/setup-prod-connection.sh",
     "use-prod-db": "bash scripts/use-prod-db.sh",
     "use-local-db": "bash scripts/use-local-db.sh"
   },
