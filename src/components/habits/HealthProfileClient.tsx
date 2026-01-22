@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
     Activity, Save, Plus, Copy, ChevronDown, ChevronUp, Trash2, Check, Loader2
 } from 'lucide-react';
@@ -26,6 +26,7 @@ export default function HealthProfileClient({ initialSections }: Props) {
     const [hasChanges, setHasChanges] = useState(false);
     const [showAddCategory, setShowAddCategory] = useState(false);
     const [newCategoryTitle, setNewCategoryTitle] = useState('');
+    const textAreaRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
 
     // セクションの展開/折りたたみ
     const toggleSection = (categoryId: string) => {
@@ -34,6 +35,13 @@ export default function HealthProfileClient({ initialSections }: Props) {
             newExpanded.delete(categoryId);
         } else {
             newExpanded.add(categoryId);
+            // 展開時に高さを調整（次のレンダリング後に実行）
+            setTimeout(() => {
+                const textarea = textAreaRefs.current.get(categoryId);
+                if (textarea) {
+                    autoResizeTextarea(textarea);
+                }
+            }, 0);
         }
         setExpandedSections(newExpanded);
     };
@@ -47,12 +55,26 @@ export default function HealthProfileClient({ initialSections }: Props) {
         }
     };
 
+    // テキストエリアの高さを自動調整
+    const autoResizeTextarea = (textarea: HTMLTextAreaElement) => {
+        textarea.style.height = 'auto';
+        const scrollHeight = textarea.scrollHeight;
+        const minHeight = 120; // 最小高さ（約5行）
+        textarea.style.height = `${Math.max(scrollHeight, minHeight)}px`;
+    };
+
     // コンテンツ更新
     const updateContent = (categoryId: string, content: string) => {
         setSections(prev => prev.map(s =>
             s.categoryId === categoryId ? { ...s, content } : s
         ));
         setHasChanges(true);
+
+        // 高さを自動調整
+        const textarea = textAreaRefs.current.get(categoryId);
+        if (textarea) {
+            autoResizeTextarea(textarea);
+        }
     };
 
     // 保存
@@ -284,10 +306,18 @@ export default function HealthProfileClient({ initialSections }: Props) {
                                 {isExpanded && (
                                     <div className="px-4 pb-4">
                                         <textarea
+                                            ref={(el) => {
+                                                if (el) {
+                                                    textAreaRefs.current.set(section.categoryId, el);
+                                                    // 初期表示時に高さを調整
+                                                    autoResizeTextarea(el);
+                                                }
+                                            }}
                                             value={section.content}
                                             onChange={(e) => updateContent(section.categoryId, e.target.value)}
                                             placeholder="ここに情報を入力..."
-                                            className="w-full min-h-[200px] p-3 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none resize-y font-mono leading-relaxed"
+                                            className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none resize-y font-mono leading-relaxed transition-[height] duration-75"
+                                            style={{ minHeight: '120px' }}
                                         />
                                         {!isCustom && hasContent && (
                                             <button

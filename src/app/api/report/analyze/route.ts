@@ -46,8 +46,9 @@ interface AnalysisResult {
 }
 
 async function callGeminiAPI(prompt: string): Promise<string> {
+    // 一時的に2.0-flashに戻して動作確認（2.5-proで問題が発生しているため）
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GOOGLE_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_API_KEY}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -56,6 +57,7 @@ async function callGeminiAPI(prompt: string): Promise<string> {
                 generationConfig: {
                     temperature: 0.7,
                     maxOutputTokens: 4096,
+                    responseMimeType: "application/json"
                 }
             })
         }
@@ -208,31 +210,37 @@ ${recordsText || '（データなし）'}
     外部環境からの防御機能。皮膚や粘膜の健康状態を含み、感染症リスクや外見的な若々しさに影響。
 
 ## 回答形式
-以下のJSON形式で回答してください。JSONのみを出力し、他の説明は不要です。
+**重要**: 必ず有効なJSON形式で回答してください。JSONのみを出力し、説明やマークダウンは含めないでください。
 
+正確なJSON形式:
 {
-  "totalScore": <0-100の整数。全データを複合的に見て、この人の健康寿命延伸の観点からの総合評価点。同年代平均を50点として相対評価>,
-  "evaluation": "<総合評価文。300-500字程度。以下の構成で段落分けして改行を入れてください：\\n\\n【良い点】\\n具体的に良好な項目を2-3個挙げて説明\\n\\n【注意点】\\n改善が必要な項目を2-3個挙げて説明\\n\\n【総括】\\n全体的な健康状態の総括を1-2文で>",
+  "totalScore": 数値,
+  "evaluation": "文字列",
   "scores": [
-    { "id": "risk_factors", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "diet_nutrition", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "sleep_recovery", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "cardiovascular", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "physical_activity", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "health_consciousness", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "anti_aging", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "brain_mental", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "metabolism", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "digestion_gut", "score": <0-100>, "reasoning": "<50字程度の根拠>" },
-    { "id": "immunity_barrier", "score": <0-100>, "reasoning": "<50字程度の根拠>" }
+    { "id": "risk_factors", "score": 数値, "reasoning": "文字列" },
+    { "id": "diet_nutrition", "score": 数値, "reasoning": "文字列" },
+    { "id": "sleep_recovery", "score": 数値, "reasoning": "文字列" },
+    { "id": "cardiovascular", "score": 数値, "reasoning": "文字列" },
+    { "id": "physical_activity", "score": 数値, "reasoning": "文字列" },
+    { "id": "health_consciousness", "score": 数値, "reasoning": "文字列" },
+    { "id": "anti_aging", "score": 数値, "reasoning": "文字列" },
+    { "id": "brain_mental", "score": 数値, "reasoning": "文字列" },
+    { "id": "metabolism", "score": 数値, "reasoning": "文字列" },
+    { "id": "digestion_gut", "score": 数値, "reasoning": "文字列" },
+    { "id": "immunity_barrier", "score": 数値, "reasoning": "文字列" }
   ]
 }
 
-注意事項:
-- 各カテゴリスコアは同年代・同性の平均を50点として相対評価
-- 総合スコアは単純平均ではなく、全データを複合的に判断して決定（SSランクの項目が悪いと総合も下がりやすい等）
-- evaluationは必ず改行（\\n\\n）で段落を分けて読みやすくしてください
-- 回答文中で「SEX」「性行為」「性的活動」「パートナーとの親密な時間」などの表現は一切使用せず、「適度な運動」「軽い運動」「身体活動」などの一般的な運動表現に置き換えてください`;
+フィールド仕様:
+- totalScore: 0-100の整数。全データを複合的に見た健康寿命延伸の総合評価点（同年代平均50点）
+- evaluation: 300-500字。構成「\\n\\n【良い点】\\n具体的な良好項目2-3個\\n\\n【注意点】\\n改善必要項目2-3個\\n\\n【総括】\\n全体総括1-2文」
+- scores: 全11カテゴリ必須。各scoreは0-100整数、reasoningは50字程度
+
+JSON作成時の注意:
+- 文字列内の改行は \\n でエスケープ
+- 最後のカンマを付けない
+- 文字列はダブルクォートで囲む
+- 「SEX」「性行為」等の表現は使わず「適度な運動」「身体活動」に置き換え`;
 }
 
 function buildAdvicePrompt(
@@ -330,7 +338,9 @@ function parseAnalysisResponse(response: string): {
     try {
         const jsonMatch = response.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
+            const jsonStr = jsonMatch[0];
+            console.log('Attempting to parse JSON, length:', jsonStr.length);
+            const parsed = JSON.parse(jsonStr);
             const scores = parsed.scores || [];
 
             const categoryScores = HEALTH_CATEGORIES.map(cat => {
@@ -353,6 +363,10 @@ function parseAnalysisResponse(response: string): {
         }
     } catch (e) {
         console.error('Failed to parse analysis response:', e);
+        console.error('Response excerpt:', response.substring(0, 500));
+        if (e instanceof SyntaxError) {
+            console.error('JSON parse error at:', e.message);
+        }
     }
 
     // フォールバック
