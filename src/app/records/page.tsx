@@ -53,7 +53,10 @@ export default async function RecordsPage() {
                                 data: r.data,
                                 additional_data: r.additional_data
                             }))}
-                            habits={habits}
+                            habits={habits.map(h => ({
+                                ...h,
+                                type: h.type as 'yes_no' | 'numeric'
+                            }))}
                             showRecords={true}
                             showHabits={true}
                         />
