@@ -1,14 +1,7 @@
-import { getHealthProfile } from '@/app/actions/health-profile';
-import HealthProfileClient from '@/components/habits/HealthProfileClient';
+import HabitsClient from '@/components/habits/HabitsClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HabitsPage() {
-    const profileRes = await getHealthProfile();
-
-    return (
-        <HealthProfileClient
-            initialSections={profileRes.data || []}
-        />
-    );
+    return <HabitsClient />;
 }

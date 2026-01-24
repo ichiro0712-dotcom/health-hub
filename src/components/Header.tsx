@@ -13,7 +13,7 @@ export default function Header() {
 
     const navLinks = [
         { href: "/trends", label: "推移", icon: BarChart2 },
-        { href: "/habits", label: "健康プロフ", icon: Activity },
+        { href: "/habits", label: "習慣", icon: Activity },
         { href: "/records", label: "診断記録", icon: FileText },
         { href: "/smartphone", label: "スマホ", icon: Smartphone },
         { href: "/dna", label: "DNA", icon: Dna },

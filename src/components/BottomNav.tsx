@@ -14,7 +14,7 @@ export default function BottomNav() {
     // メインメニュー（4つ + その他）
     const mainItems = [
         { href: '/trends', icon: BarChart2, label: '推移' },
-        { href: '/habits', icon: Activity, label: '健康プロフ' },
+        { href: '/habits', icon: Activity, label: '習慣' },
         { href: '/advisor', icon: MessageSquare, label: 'レポート' },
         { href: '/records', icon: FileText, label: '診断記録' },
     ];

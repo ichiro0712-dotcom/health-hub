@@ -1,6 +1,7 @@
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -30,6 +31,10 @@ model User {
   hrvData            HrvData[]
   detailedSleep      DetailedSleep[]
   intradayHeartRate  IntradayHeartRate[]
+
+  // Habit Tracking
+  habits             Habit[]
+  habitRecords       HabitRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -381,4 +386,46 @@ model GoogleDocsSettings {
 
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+// =====================================================
+// Habit Tracking Models
+// =====================================================
+
+// 習慣マスター定義
+model Habit {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String   // 習慣名 (e.g., "運動", "瞑想", "読書")
+  type        String   // "yes_no" | "numeric"
+  unit        String?  // 数値タイプの場合の単位 (e.g., "回", "時間", "分", "km")
+  color       String   @default("#3B82F6") // 色コード (hex)
+  order       Int      @default(0) // 表示順
+
+  records     HabitRecord[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// 習慣記録
+model HabitRecord {
+  id          String   @id @default(cuid())
+  habitId     String
+  habit       Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date        DateTime @db.Date // 記録日
+  value       Float?   // 数値タイプの場合の値、Yes/Noタイプの場合は 1 or 0
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([habitId, date])
+  @@index([userId, date])
 }

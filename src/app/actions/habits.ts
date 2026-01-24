@@ -84,3 +84,28 @@ export async function deleteLifestyleHabit(id: string) {
         return { success: false, error: 'Failed to delete habit' };
     }
 }
+
+export async function getHabitsForExport() {
+    const userId = await getUserId();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    try {
+        const habits = await prisma.habit.findMany({
+            where: { userId },
+            orderBy: { order: 'asc' },
+            include: {
+                records: {
+                    orderBy: { date: 'desc' },
+                },
+            },
+        });
+
+        return {
+            success: true,
+            data: habits,
+        };
+    } catch (error) {
+        console.error('Error fetching habits for export:', error);
+        return { success: false, error: 'Internal server error' };
+    }
+}

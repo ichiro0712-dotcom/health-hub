@@ -1,8 +1,9 @@
 import { getRecords } from '../actions/records';
+import { getHabitsForExport } from '../actions/habits';
 import Link from 'next/link';
 import { Calendar, FileText, ArrowRight, Activity, Plus } from 'lucide-react';
 import Header from '@/components/Header';
-import RecordsCopyButton from '@/components/RecordsCopyButton';
+import ExportDataButton from '@/components/ExportDataButton';
 import { format } from 'date-fns';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -17,6 +18,8 @@ export default async function RecordsPage() {
     }
 
     const { success, data: records } = await getRecords();
+    const habitsResult = await getHabitsForExport();
+    const habits = habitsResult.success ? habitsResult.data || [] : [];
 
     if (!success || !records) {
         return (
@@ -41,16 +44,19 @@ export default async function RecordsPage() {
                         <p className="text-sm text-slate-500 dark:text-slate-400">健康診断や検査結果の履歴を管理します</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {records.length > 0 && (
-                            <RecordsCopyButton records={records.map(r => ({
+                        <ExportDataButton
+                            records={records.map(r => ({
                                 id: r.id,
                                 date: r.date,
                                 title: r.title,
                                 summary: r.summary,
                                 data: r.data,
                                 additional_data: r.additional_data
-                            }))} />
-                        )}
+                            }))}
+                            habits={habits}
+                            showRecords={true}
+                            showHabits={true}
+                        />
                         <Link
                             href="/import"
                             className="hidden md:flex items-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition shadow-sm font-medium"
