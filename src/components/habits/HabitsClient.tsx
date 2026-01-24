@@ -153,23 +153,65 @@ export default function HabitsClient() {
         }
     };
 
-    // 記録を更新
+    // 記録を更新（楽観的UI）
     const handleRecordUpdate = async (habitId: string, date: Date, value: number | null) => {
+        const dateStr = date.toISOString().split('T')[0];
+
+        // 楽観的UI: 即座にローカルステートを更新
+        setHabits(prevHabits =>
+            prevHabits.map(habit => {
+                if (habit.id !== habitId) return habit;
+
+                const existingRecordIndex = habit.records.findIndex(r => {
+                    const recordDateStr = new Date(r.date).toISOString().split('T')[0];
+                    return recordDateStr === dateStr;
+                });
+
+                let updatedRecords = [...habit.records];
+
+                if (existingRecordIndex !== -1) {
+                    // 既存の記録を更新
+                    updatedRecords[existingRecordIndex] = {
+                        ...updatedRecords[existingRecordIndex],
+                        value,
+                    };
+                } else {
+                    // 新しい記録を追加
+                    updatedRecords.push({
+                        id: `temp-${Date.now()}`, // 一時ID
+                        habitId,
+                        date,
+                        value,
+                    });
+                }
+
+                return {
+                    ...habit,
+                    records: updatedRecords,
+                };
+            })
+        );
+
+        // バックグラウンドでAPIを呼び出し
         try {
             const res = await fetch(`/api/habits/${habitId}/records`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    date: date.toISOString().split('T')[0],
+                    date: dateStr,
                     value,
                 }),
             });
 
-            if (res.ok) {
+            if (!res.ok) {
+                // エラーの場合、データを再取得してロールバック
+                console.error('Record update failed, rolling back...');
                 await fetchHabits();
             }
         } catch (error) {
             console.error('Error updating record:', error);
+            // エラーの場合、データを再取得してロールバック
+            await fetchHabits();
         }
     };
 
@@ -222,7 +264,7 @@ export default function HabitsClient() {
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-3 sm:p-6 mb-4">
                     {/* 週の曜日ヘッダー */}
                     <div className="flex items-center mb-2 text-xs text-slate-500 dark:text-slate-400">
-                        <div className="w-40 flex-shrink-0 flex items-center gap-1">
+                        <div className="w-28 flex-shrink-0 flex items-center gap-1">
                             <button
                                 onClick={() => {
                                     const prev = new Date(currentDate);
@@ -273,8 +315,8 @@ export default function HabitsClient() {
                                     className="flex items-center bg-slate-50 dark:bg-slate-900/50 rounded-lg p-2 group"
                                     style={{ borderLeft: `4px solid ${habit.color}` }}
                                 >
-                                    {/* 習慣名 - 固定幅160px */}
-                                    <div className="flex items-center gap-1 w-40 flex-shrink-0 pr-2">
+                                    {/* 習慣名 - 固定幅112px (30%短縮) */}
+                                    <div className="flex items-center gap-1 w-28 flex-shrink-0 pr-2">
                                         {editingHabit?.id === habit.id ? (
                                             <>
                                                 <input
