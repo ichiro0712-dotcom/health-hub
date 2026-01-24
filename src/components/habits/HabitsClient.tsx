@@ -383,20 +383,22 @@ export default function HabitsClient() {
                                                                     currentValue: record?.value ?? null,
                                                                 })
                                                             }
-                                                            className="flex flex-col items-center justify-center min-w-[2.5rem] leading-tight"
+                                                            className="w-full h-6 flex flex-col items-center justify-center leading-none py-0.5"
                                                         >
                                                             <span
-                                                                className={`text-sm font-medium ${!record?.value && 'text-slate-400 dark:text-slate-500'}`}
+                                                                className={`text-xs font-medium leading-none ${!record?.value && 'text-slate-400 dark:text-slate-500'}`}
                                                                 style={record?.value ? { color: habit.color } : {}}
                                                             >
                                                                 {record?.value ?? 0}
                                                             </span>
-                                                            <span
-                                                                className={`text-[10px] ${!record?.value && 'text-slate-400 dark:text-slate-500'}`}
-                                                                style={record?.value ? { color: habit.color } : {}}
-                                                            >
-                                                                {habit.unit || ''}
-                                                            </span>
+                                                            {habit.unit && (
+                                                                <span
+                                                                    className={`text-[9px] leading-none mt-0.5 ${!record?.value && 'text-slate-400 dark:text-slate-500'}`}
+                                                                    style={record?.value ? { color: habit.color } : {}}
+                                                                >
+                                                                    {habit.unit}
+                                                                </span>
+                                                            )}
                                                         </button>
                                                     )}
                                                 </div>
