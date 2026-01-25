@@ -22,7 +22,7 @@ export default function BottomNav() {
     // その他メニュー
     const moreItems = [
         { href: '/', icon: Home, label: 'ホーム', exact: true },
-        { href: '/health-profile', icon: Heart, label: '健康プロフィール' },
+        { href: '/health-profile', icon: Heart, label: '健康プロフ' },
         { href: '/smartphone', icon: Smartphone, label: 'スマホ連携' },
         { href: '/dna', icon: Dna, label: 'DNA' },
         { href: '/profile', icon: Menu, label: '設定' },
