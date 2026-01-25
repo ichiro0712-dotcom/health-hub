@@ -76,7 +76,7 @@ export default function Header() {
                                 <div className="absolute top-full right-0 pt-2 w-48 hidden group-hover:block animate-in fade-in slide-in-from-top-2 duration-200 z-50">
                                     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 p-1">
                                         <Link href="/profile" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
-                                            <UserIcon className="w-4 h-4" /> マイページ
+                                            <UserIcon className="w-4 h-4" /> 健康プロフィール
                                         </Link>
                                         <Link href="/profile/settings/items" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
                                             <Settings className="w-4 h-4" /> 検査項目・基準値設定
