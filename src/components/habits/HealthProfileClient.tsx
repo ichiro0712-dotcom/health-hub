@@ -283,17 +283,16 @@ export default function HealthProfileClient({ initialSections }: Props) {
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {isCustom && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteCategory(section.categoryId);
-                                                }}
-                                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteCategory(section.categoryId);
+                                            }}
+                                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                            title={isCustom ? 'カテゴリを削除' : '内容をクリア'}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                         {isExpanded ? (
                                             <ChevronUp className="w-5 h-5 text-slate-400" />
                                         ) : (
@@ -319,14 +318,6 @@ export default function HealthProfileClient({ initialSections }: Props) {
                                             className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none resize-y font-mono leading-relaxed transition-[height] duration-75"
                                             style={{ minHeight: '120px' }}
                                         />
-                                        {!isCustom && hasContent && (
-                                            <button
-                                                onClick={() => handleDeleteCategory(section.categoryId)}
-                                                className="mt-2 text-xs text-slate-400 hover:text-red-500 transition-colors"
-                                            >
-                                                内容をクリア
-                                            </button>
-                                        )}
                                     </div>
                                 )}
                             </div>
