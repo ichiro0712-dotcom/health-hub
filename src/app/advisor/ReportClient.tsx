@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Copy, Check, Activity, TrendingUp, Loader2, RefreshCw, AlertTriangle, ThumbsDown, Zap } from 'lucide-react';
+import { Copy, Check, Activity, TrendingUp, Loader2, RefreshCw, AlertTriangle, ThumbsDown, Zap, X } from 'lucide-react';
+import { analyzeHealthData } from '@/app/actions/analyze-health';
 import { getAllDataForExport } from '@/app/actions/report';
 
 interface CategoryScore {
@@ -10,7 +11,8 @@ interface CategoryScore {
     rank: string;
     score: number;
     avgScore: number;
-    reasoning: string;
+    summary: string;
+    detail: string;
 }
 
 interface AdviceItem {
@@ -43,13 +45,18 @@ const getRankColor = (rank: string) => {
     }
 };
 
-export default function ReportClient() {
+interface ReportClientProps {
+    userEmail: string;
+}
+
+export default function ReportClient({ userEmail }: ReportClientProps) {
     const [copied, setCopied] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<CategoryScore | null>(null);
 
     // 前回の診断結果を読み込み
     useEffect(() => {
@@ -89,23 +96,19 @@ export default function ReportClient() {
         setIsAnalyzing(true);
         setError(null);
         try {
-            const response = await fetch('/api/report/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-            });
+            // Server Actionを呼び出す（emailを渡す）
+            const result = await analyzeHealthData(userEmail);
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || '分析に失敗しました');
+            if (!result.success) {
+                throw new Error(result.error || '分析に失敗しました');
             }
 
-            if (data.success && data.analysis) {
-                setAnalysis(data.analysis);
+            if (result.analysis) {
+                setAnalysis(result.analysis);
                 const now = new Date().toISOString();
                 setLastAnalyzedAt(now);
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                    analysis: data.analysis,
+                    analysis: result.analysis,
                     analyzedAt: now
                 }));
             } else {
@@ -146,6 +149,17 @@ export default function ReportClient() {
         return rounded >= 0 ? `+${rounded}` : `${rounded}`;
     };
 
+    // 偏差値からランクを算出
+    const getDeviationRank = (deviation: number) => {
+        if (deviation >= 8) return 'SS';
+        if (deviation >= 5) return 'S';
+        if (deviation >= 2) return 'A';
+        if (deviation >= -1) return 'B';
+        if (deviation >= -4) return 'C';
+        if (deviation >= -7) return 'D';
+        return 'E';
+    };
+
     const formatDate = (isoString: string) => {
         const date = new Date(isoString);
         return date.toLocaleDateString('ja-JP', {
@@ -158,6 +172,87 @@ export default function ReportClient() {
     };
 
     return (
+        <>
+            {/* スコア詳細モーダル */}
+            {selectedCategory && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                    onClick={() => setSelectedCategory(null)}
+                >
+                    <div
+                        className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-lg w-full p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between mb-4">
+                            <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">
+                                        {selectedCategory.name}
+                                    </h3>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm">
+                                    <span className={`font-bold text-2xl ${getScoreColor(selectedCategory.score)}`}>
+                                        {selectedCategory.score}点
+                                    </span>
+                                    <span className="text-slate-500 dark:text-slate-400">
+                                        平均: {selectedCategory.avgScore}点
+                                    </span>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${getRankColor(getDeviationRank(getDeviation(selectedCategory.score, selectedCategory.avgScore)))}`}>
+                                        {getDeviationRank(getDeviation(selectedCategory.score, selectedCategory.avgScore))}
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setSelectedCategory(null)}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="mb-4">
+                            <div className="relative h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${
+                                        selectedCategory.score >= 70 ? 'bg-emerald-500' :
+                                        selectedCategory.score >= 50 ? 'bg-teal-500' :
+                                        selectedCategory.score >= 30 ? 'bg-yellow-500' :
+                                        'bg-red-500'
+                                    }`}
+                                    style={{ width: `${selectedCategory.score}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 space-y-3">
+                            <div>
+                                <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    要点
+                                </h4>
+                                <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
+                                    {selectedCategory.summary || '要点の説明はありません。'}
+                                </p>
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    詳細
+                                </h4>
+                                <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
+                                    {selectedCategory.detail || '詳細な説明はありません。'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => setSelectedCategory(null)}
+                            className="mt-6 w-full py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl font-medium transition-colors"
+                        >
+                            閉じる
+                        </button>
+                    </div>
+                </div>
+            )}
+
         <div className="max-w-4xl mx-auto px-4 py-8">
             {/* ヘッダー */}
             <div className="mb-6">
@@ -287,8 +382,11 @@ export default function ReportClient() {
                 <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
                     カテゴリ別スコア
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
                     同年代平均との比較（中央が平均、右が+、左が-）
+                </p>
+                <p className="text-xs text-teal-600 dark:text-teal-400 mb-4">
+                    💡 各項目をクリックすると詳しい説明が表示されます
                 </p>
 
                 <div className="space-y-4">
@@ -299,17 +397,23 @@ export default function ReportClient() {
                             const isPositive = deviation >= 0;
 
                             return (
-                                <div key={cat.id} className="space-y-1">
+                                <div
+                                    key={cat.id}
+                                    className="space-y-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg p-2 -mx-2 transition-colors"
+                                    onClick={() => setSelectedCategory(cat)}
+                                >
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${getRankColor(cat.rank)}`}>
-                                                {cat.rank}
-                                            </span>
+                                        <span className="text-slate-700 dark:text-slate-300">
                                             {cat.name}
                                         </span>
-                                        <span className={`font-medium ${deviation >= 0 ? 'text-emerald-500' : deviation >= -4 ? 'text-yellow-500' : 'text-red-500'}`}>
-                                            {formatDeviation(deviation)}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`font-medium ${deviation >= 0 ? 'text-emerald-500' : deviation >= -4 ? 'text-yellow-500' : 'text-red-500'}`}>
+                                                {formatDeviation(deviation)}
+                                            </span>
+                                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${getRankColor(getDeviationRank(deviation))}`}>
+                                                {getDeviationRank(deviation)}
+                                            </span>
+                                        </div>
                                     </div>
                                     <div className="relative h-5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                         {/* 中央線（平均） */}
@@ -336,11 +440,10 @@ export default function ReportClient() {
                                             />
                                         )}
                                     </div>
-                                    {cat.reasoning && (
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 pl-2 border-l-2 border-slate-200 dark:border-slate-600">
-                                            {cat.reasoning}
-                                        </p>
-                                    )}
+                                    {/* 要点を常時表示 */}
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed pl-2">
+                                        {cat.summary}
+                                    </p>
                                 </div>
                             );
                         })
@@ -489,5 +592,6 @@ export default function ReportClient() {
                 具体的な健康上の問題については医療機関にご相談ください。
             </p>
         </div>
+        </>
     );
 }

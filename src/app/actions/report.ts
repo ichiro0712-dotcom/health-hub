@@ -152,7 +152,7 @@ export async function getAllDataForExport(): Promise<{
 }
 
 // AI分析用の構造化データを取得
-export async function getStructuredDataForAnalysis(): Promise<{
+export async function getStructuredDataForAnalysis(emailParam?: string): Promise<{
     success: boolean;
     data?: {
         user: { birthDate: Date | null; name: string | null; age: number | null };
@@ -169,8 +169,13 @@ export async function getStructuredDataForAnalysis(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await getServerSession(authOptions);
-        const userEmail = session?.user?.email;
+        // emailParamが渡されていればそれを使用、なければセッションから取得
+        let userEmail = emailParam;
+
+        if (!userEmail) {
+            const session = await getServerSession(authOptions);
+            userEmail = session?.user?.email;
+        }
 
         if (!userEmail) {
             return { success: false, error: 'Unauthorized' };

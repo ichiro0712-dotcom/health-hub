@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getStructuredDataForAnalysis } from '@/app/actions/report';
+import { getToken } from 'next-auth/jwt';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
@@ -46,9 +47,9 @@ interface AnalysisResult {
 }
 
 async function callGeminiAPI(prompt: string): Promise<string> {
-    // 一時的に2.0-flashに戻して動作確認（2.5-proで問題が発生しているため）
+    // Gemini 2.5 Pro を使用（高精度な分析のため）
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GOOGLE_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GOOGLE_API_KEY}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -56,7 +57,7 @@ async function callGeminiAPI(prompt: string): Promise<string> {
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 4096,
+                    maxOutputTokens: 8192,
                     responseMimeType: "application/json"
                 }
             })
@@ -93,8 +94,17 @@ async function callGeminiAPI(prompt: string): Promise<string> {
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        // App RouterではgetTokenを使用してJWTトークンを取得
+        const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+
+        console.log('🔍 Auth debug:', {
+            hasToken: !!token,
+            hasEmail: !!token?.email,
+            email: token?.email
+        });
+
+        if (!token?.email) {
+            console.error('❌ No token or email found');
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

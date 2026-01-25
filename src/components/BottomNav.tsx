@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, BarChart2, FileText, Menu, Activity, MessageSquare, Dna, Smartphone } from 'lucide-react';
+import { Home, BarChart2, FileText, Menu, Activity, MessageSquare, Dna, Smartphone, Heart } from 'lucide-react';
 import { useState } from 'react';
 
 export default function BottomNav() {
@@ -22,6 +22,7 @@ export default function BottomNav() {
     // その他メニュー
     const moreItems = [
         { href: '/', icon: Home, label: 'ホーム', exact: true },
+        { href: '/health-profile', icon: Heart, label: '健康プロフィール' },
         { href: '/smartphone', icon: Smartphone, label: 'スマホ連携' },
         { href: '/dna', icon: Dna, label: 'DNA' },
         { href: '/profile', icon: Menu, label: '設定' },
@@ -96,7 +97,7 @@ export default function BottomNav() {
                     <button
                         onClick={() => setShowMore(!showMore)}
                         className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-xl transition-all min-w-[60px] ${
-                            showMore || pathname === '/' || isActive('/smartphone') || isActive('/dna') || isActive('/profile') || isActive('/settings')
+                            showMore || pathname === '/' || isActive('/health-profile') || isActive('/smartphone') || isActive('/dna') || isActive('/profile') || isActive('/settings')
                                 ? 'text-teal-600 dark:text-teal-400'
                                 : 'text-slate-400 dark:text-slate-500 active:text-slate-600 dark:active:text-slate-300'
                         }`}
