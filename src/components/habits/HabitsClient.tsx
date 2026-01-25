@@ -276,7 +276,7 @@ export default function HabitsClient() {
                                 <ChevronLeft className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
                             </button>
                             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                                {weekDates[0].getFullYear()}:{weekDates[0].getMonth() + 1}/{weekDates[0].getDate()}-{weekDates[6].getMonth() + 1}/{weekDates[6].getDate()}
+                                {weekDates[0].getMonth() + 1}/{weekDates[0].getDate()}-{weekDates[6].getMonth() + 1}/{weekDates[6].getDate()}
                             </span>
                             <button
                                 onClick={() => {
