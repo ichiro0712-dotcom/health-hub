@@ -41,6 +41,7 @@ export default function HabitsClient() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+    const [editModalHabit, setEditModalHabit] = useState<Habit | null>(null);
     const [numericInputModal, setNumericInputModal] = useState<{
         habit: Habit;
         date: Date;
@@ -52,6 +53,7 @@ export default function HabitsClient() {
         unit: '回',
         color: COLORS[0],
     });
+    const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
 
     // 今週の日付を取得
     const getWeekDates = (date: Date) => {
@@ -113,7 +115,32 @@ export default function HabitsClient() {
         }
     };
 
-    // 習慣を更新
+    // 習慣を更新（モーダルから）
+    const handleUpdateHabitFromModal = async () => {
+        if (!editModalHabit) return;
+
+        try {
+            const res = await fetch(`/api/habits/${editModalHabit.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: editModalHabit.name,
+                    type: editModalHabit.type,
+                    unit: editModalHabit.type === 'numeric' ? editModalHabit.unit : null,
+                    color: editModalHabit.color,
+                }),
+            });
+
+            if (res.ok) {
+                await fetchHabits();
+                setEditModalHabit(null);
+            }
+        } catch (error) {
+            console.error('Error updating habit:', error);
+        }
+    };
+
+    // 習慣を更新（インライン編集）
     const handleUpdateHabit = async (habitId: string) => {
         if (!editingHabit) return;
 
@@ -147,9 +174,25 @@ export default function HabitsClient() {
 
             if (res.ok) {
                 await fetchHabits();
+                setEditModalHabit(null);
             }
         } catch (error) {
             console.error('Error deleting habit:', error);
+        }
+    };
+
+    // 長押し処理
+    const handleLongPressStart = (habit: Habit) => {
+        const timer = setTimeout(() => {
+            setEditModalHabit(habit);
+        }, 500); // 500ms長押し
+        setLongPressTimer(timer);
+    };
+
+    const handleLongPressEnd = () => {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            setLongPressTimer(null);
         }
     };
 
@@ -317,36 +360,16 @@ export default function HabitsClient() {
                                 >
                                     {/* 習慣名 - 固定幅112px (30%短縮) */}
                                     <div className="flex items-center gap-1 w-28 flex-shrink-0 pr-2">
-                                        {editingHabit?.id === habit.id ? (
-                                            <>
-                                                <input
-                                                    type="text"
-                                                    value={editingHabit.name}
-                                                    onChange={(e) =>
-                                                        setEditingHabit({ ...editingHabit, name: e.target.value })
-                                                    }
-                                                    className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-xs w-full"
-                                                />
-                                                <button
-                                                    onClick={() => handleUpdateHabit(habit.id)}
-                                                    className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded flex-shrink-0"
-                                                >
-                                                    <Check className="w-3 h-3" />
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className="text-xs sm:text-sm font-medium text-slate-800 dark:text-white leading-tight break-words line-clamp-2 flex-1">
-                                                    {habit.name}
-                                                </span>
-                                                <button
-                                                    onClick={() => setEditingHabit(habit)}
-                                                    className="p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 opacity-0 group-hover:opacity-100 flex-shrink-0"
-                                                >
-                                                    <Edit2 className="w-2.5 h-2.5" />
-                                                </button>
-                                            </>
-                                        )}
+                                        <span
+                                            className="text-xs sm:text-sm font-medium text-slate-800 dark:text-white leading-tight break-words line-clamp-2 flex-1 cursor-pointer select-none"
+                                            onTouchStart={() => handleLongPressStart(habit)}
+                                            onTouchEnd={handleLongPressEnd}
+                                            onMouseDown={() => handleLongPressStart(habit)}
+                                            onMouseUp={handleLongPressEnd}
+                                            onMouseLeave={handleLongPressEnd}
+                                        >
+                                            {habit.name}
+                                        </span>
                                     </div>
 
                                     {/* 週間記録 - 均等配置 */}
@@ -484,6 +507,121 @@ export default function HabitsClient() {
                             >
                                 保存
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 編集モーダル */}
+            {editModalHabit && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-white">習慣を編集</h3>
+                            <button
+                                onClick={() => setEditModalHabit(null)}
+                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                            >
+                                <X className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    習慣名
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editModalHabit.name}
+                                    onChange={(e) => setEditModalHabit({ ...editModalHabit, name: e.target.value })}
+                                    placeholder="例: 運動、読書、瞑想"
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    タイプ
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        onClick={() => setEditModalHabit({ ...editModalHabit, type: 'yes_no' })}
+                                        className={`py-2 px-4 rounded-lg transition ${
+                                            editModalHabit.type === 'yes_no'
+                                                ? 'bg-teal-500 text-white'
+                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                        }`}
+                                    >
+                                        Yes/No
+                                    </button>
+                                    <button
+                                        onClick={() => setEditModalHabit({ ...editModalHabit, type: 'numeric' })}
+                                        className={`py-2 px-4 rounded-lg transition ${
+                                            editModalHabit.type === 'numeric'
+                                                ? 'bg-teal-500 text-white'
+                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                        }`}
+                                    >
+                                        数値
+                                    </button>
+                                </div>
+                            </div>
+
+                            {editModalHabit.type === 'numeric' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        単位
+                                    </label>
+                                    <select
+                                        value={editModalHabit.unit || '回'}
+                                        onChange={(e) => setEditModalHabit({ ...editModalHabit, unit: e.target.value })}
+                                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-white"
+                                    >
+                                        {UNITS.map((unit) => (
+                                            <option key={unit} value={unit}>
+                                                {unit}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    色
+                                </label>
+                                <div className="grid grid-cols-8 gap-2">
+                                    {COLORS.map((color) => (
+                                        <button
+                                            key={color}
+                                            onClick={() => setEditModalHabit({ ...editModalHabit, color })}
+                                            className={`w-full aspect-square rounded-lg transition ${
+                                                editModalHabit.color === color
+                                                    ? 'ring-2 ring-offset-2 ring-slate-400 dark:ring-slate-500'
+                                                    : ''
+                                            }`}
+                                            style={{ backgroundColor: color }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    onClick={handleUpdateHabitFromModal}
+                                    className="flex-1 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-lg hover:from-teal-600 hover:to-emerald-600 transition font-medium"
+                                >
+                                    保存
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteHabit(editModalHabit.id)}
+                                    className="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-medium flex items-center gap-2"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    削除
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
