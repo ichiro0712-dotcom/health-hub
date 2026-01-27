@@ -55,12 +55,29 @@ export default function HealthProfileClient({ initialSections }: Props) {
         }
     };
 
-    // テキストエリアの高さを自動調整
+    // テキストエリアの高さを自動調整（初期表示用）
     const autoResizeTextarea = (textarea: HTMLTextAreaElement) => {
+        const minHeight = 120; // 最小高さ（約5行）
+        const scrollHeight = textarea.scrollHeight;
+        const newHeight = Math.max(scrollHeight, minHeight);
+        textarea.style.height = `${newHeight}px`;
+    };
+
+    // テキストエリアの高さを増やす（入力時用 - 縮まない）
+    const growTextareaIfNeeded = (textarea: HTMLTextAreaElement) => {
+        const minHeight = 120;
+        const currentHeight = textarea.offsetHeight;
+        // 一時的にautoにして本来の高さを計算（描画には反映されない）
+        const originalHeight = textarea.style.height;
         textarea.style.height = 'auto';
         const scrollHeight = textarea.scrollHeight;
-        const minHeight = 120; // 最小高さ（約5行）
-        textarea.style.height = `${Math.max(scrollHeight, minHeight)}px`;
+        textarea.style.height = originalHeight; // 即座に戻す
+
+        const neededHeight = Math.max(scrollHeight, minHeight);
+        // 現在より高さが必要な場合のみ更新（縮まない）
+        if (neededHeight > currentHeight) {
+            textarea.style.height = `${neededHeight}px`;
+        }
     };
 
     // コンテンツ更新
@@ -70,10 +87,10 @@ export default function HealthProfileClient({ initialSections }: Props) {
         ));
         setHasChanges(true);
 
-        // 高さを自動調整
+        // 高さを調整（必要な場合のみ増やす - 縮まない）
         const textarea = textAreaRefs.current.get(categoryId);
         if (textarea) {
-            autoResizeTextarea(textarea);
+            growTextareaIfNeeded(textarea);
         }
     };
 

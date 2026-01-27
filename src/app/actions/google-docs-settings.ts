@@ -157,12 +157,15 @@ export async function triggerGoogleDocsSync(): Promise<{ success: boolean; error
         );
 
         if (!recordsResult.success || !profileResult.success) {
-            return { success: false, error: 'Sync failed' };
+            const errors: string[] = [];
+            if (!recordsResult.success) errors.push(`Records: ${recordsResult.error || 'unknown'}`);
+            if (!profileResult.success) errors.push(`Profile: ${profileResult.error || 'unknown'}`);
+            return { success: false, error: errors.join('; ') };
         }
 
         return { success: true };
     } catch (error) {
         console.error('Failed to trigger sync:', error);
-        return { success: false, error: 'Sync failed' };
+        return { success: false, error: `Sync failed: ${error instanceof Error ? error.message : String(error)}` };
     }
 }
