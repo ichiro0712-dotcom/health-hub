@@ -8,16 +8,28 @@ const HEALTH_PROFILE_DOC_ID = '1sHZtZpcFE3Gv8IT8AZZftk3xnCCOUcVwfkC9NuzRanA';
 
 // Initialize Google Docs API client
 function getDocsClient() {
-    const keyFilePath = path.join(process.cwd(), 'google-service-account.json');
+    let auth;
 
-    if (!fs.existsSync(keyFilePath)) {
-        throw new Error('Google service account key file not found');
+    // 本番環境: 環境変数から認証情報を読み込む
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+        const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        auth = new google.auth.GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/documents'],
+        });
+    } else {
+        // ローカル開発: ファイルから認証情報を読み込む
+        const keyFilePath = path.join(process.cwd(), 'google-service-account.json');
+
+        if (!fs.existsSync(keyFilePath)) {
+            throw new Error('Google service account key file not found. Set GOOGLE_SERVICE_ACCOUNT_JSON env var for production.');
+        }
+
+        auth = new google.auth.GoogleAuth({
+            keyFile: keyFilePath,
+            scopes: ['https://www.googleapis.com/auth/documents'],
+        });
     }
-
-    const auth = new google.auth.GoogleAuth({
-        keyFile: keyFilePath,
-        scopes: ['https://www.googleapis.com/auth/documents'],
-    });
 
     return google.docs({ version: 'v1', auth });
 }
