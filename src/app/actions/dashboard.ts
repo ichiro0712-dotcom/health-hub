@@ -2,20 +2,18 @@
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { DashboardResponse } from "@/types/dashboard";
-
-const prisma = new PrismaClient();
 
 export async function getDashboardData(): Promise<DashboardResponse> {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
         return { success: false, error: "Unauthorized" };
     }
 
     const user = await prisma.user.findUnique({
-        where: { email: session.user.email }
+        where: { id: session.user.id }
     });
 
     if (!user) {

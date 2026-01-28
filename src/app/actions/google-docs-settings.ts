@@ -24,12 +24,12 @@ export async function getGoogleDocsSettings(): Promise<{
 }> {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return { success: false, error: 'Unauthorized' };
         }
 
         const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
+            where: { id: session.user.id },
             include: { googleDocsSettings: true }
         });
 
@@ -57,18 +57,20 @@ export async function getGoogleDocsSettings(): Promise<{
 
 // 設定を保存
 export async function saveGoogleDocsSettings(data: {
+    recordsDocId?: string | null;
+    profileDocId?: string | null;
     recordsHeaderText?: string | null;
     profileHeaderText?: string | null;
     autoSyncEnabled?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return { success: false, error: 'Unauthorized' };
         }
 
         const user = await prisma.user.findUnique({
-            where: { email: session.user.email }
+            where: { id: session.user.id }
         });
 
         if (!user) {
@@ -78,17 +80,17 @@ export async function saveGoogleDocsSettings(data: {
         await prisma.googleDocsSettings.upsert({
             where: { userId: user.id },
             update: {
-                recordsDocId: DEFAULT_RECORDS_DOC_ID,
+                recordsDocId: data.recordsDocId || DEFAULT_RECORDS_DOC_ID,
                 recordsHeaderText: data.recordsHeaderText,
-                profileDocId: DEFAULT_PROFILE_DOC_ID,
+                profileDocId: data.profileDocId || DEFAULT_PROFILE_DOC_ID,
                 profileHeaderText: data.profileHeaderText,
                 autoSyncEnabled: data.autoSyncEnabled ?? true,
             },
             create: {
                 userId: user.id,
-                recordsDocId: DEFAULT_RECORDS_DOC_ID,
+                recordsDocId: data.recordsDocId || DEFAULT_RECORDS_DOC_ID,
                 recordsHeaderText: data.recordsHeaderText,
-                profileDocId: DEFAULT_PROFILE_DOC_ID,
+                profileDocId: data.profileDocId || DEFAULT_PROFILE_DOC_ID,
                 profileHeaderText: data.profileHeaderText,
                 autoSyncEnabled: data.autoSyncEnabled ?? true,
             }
@@ -105,12 +107,12 @@ export async function saveGoogleDocsSettings(data: {
 export async function triggerGoogleDocsSync(): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return { success: false, error: 'Unauthorized' };
         }
 
         const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
+            where: { id: session.user.id },
             include: { googleDocsSettings: true }
         });
 
@@ -146,6 +148,16 @@ export async function triggerGoogleDocsSync(): Promise<{ success: boolean; error
             orderBy: { orderIndex: 'asc' }
         });
 
+        // 習慣データを取得
+        const habits = await prisma.habit.findMany({
+            where: { userId: user.id },
+            include: {
+                records: {
+                    orderBy: { date: 'desc' }
+                }
+            }
+        });
+
         const profileResult = await syncHealthProfileToGoogleDocs(
             sections.map(s => ({
                 categoryId: s.categoryId,
@@ -153,7 +165,17 @@ export async function triggerGoogleDocsSync(): Promise<{ success: boolean; error
                 content: s.content,
                 orderIndex: s.orderIndex
             })),
-            user.googleDocsSettings?.profileHeaderText || undefined
+            user.googleDocsSettings?.profileHeaderText || undefined,
+            habits.map(h => ({
+                id: h.id,
+                name: h.name,
+                type: h.type as 'yes_no' | 'numeric',
+                unit: h.unit,
+                records: h.records.map(r => ({
+                    date: r.date,
+                    value: r.value
+                }))
+            }))
         );
 
         if (!recordsResult.success || !profileResult.success) {

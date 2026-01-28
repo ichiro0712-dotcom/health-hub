@@ -2,19 +2,17 @@
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "@/lib/prisma";
 
 export async function exportToNotebookML() {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
         return { success: false, error: "Unauthorized" };
     }
 
     const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
+        where: { id: session.user.id },
         include: {
             healthRecords: true,
             fitData: true

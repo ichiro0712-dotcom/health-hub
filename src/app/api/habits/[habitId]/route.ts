@@ -10,16 +10,8 @@ export async function PUT(
 ) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { habitId } = await params;
@@ -27,7 +19,7 @@ export async function PUT(
 
         // 習慣の所有権を確認
         const existingHabit = await prisma.habit.findFirst({
-            where: { id: habitId, userId: user.id },
+            where: { id: habitId, userId: session.user.id },
         });
 
         if (!existingHabit) {
@@ -58,23 +50,15 @@ export async function DELETE(
 ) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { habitId } = await params;
 
         // 習慣の所有権を確認
         const existingHabit = await prisma.habit.findFirst({
-            where: { id: habitId, userId: user.id },
+            where: { id: habitId, userId: session.user.id },
         });
 
         if (!existingHabit) {

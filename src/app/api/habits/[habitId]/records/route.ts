@@ -10,16 +10,8 @@ export async function POST(
 ) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { habitId } = await params;
@@ -27,7 +19,7 @@ export async function POST(
 
         // 習慣の所有権を確認
         const habit = await prisma.habit.findFirst({
-            where: { id: habitId, userId: user.id },
+            where: { id: habitId, userId: session.user.id },
         });
 
         if (!habit) {
@@ -59,7 +51,7 @@ export async function POST(
             },
             create: {
                 habitId,
-                userId: user.id,
+                userId: session.user.id,
                 date: recordDate,
                 value: value ?? null,
             },
@@ -82,16 +74,8 @@ export async function DELETE(
 ) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { habitId } = await params;
@@ -109,7 +93,7 @@ export async function DELETE(
 
         // 習慣の所有権を確認
         const habit = await prisma.habit.findFirst({
-            where: { id: habitId, userId: user.id },
+            where: { id: habitId, userId: session.user.id },
         });
 
         if (!habit) {

@@ -27,7 +27,7 @@ export interface SyncResultResponse {
  */
 export async function getFitbitSyncStatus(): Promise<SyncStatusResponse> {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
         return {
             success: false,
             connected: false,
@@ -39,7 +39,7 @@ export async function getFitbitSyncStatus(): Promise<SyncStatusResponse> {
     }
 
     try {
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        const user = await prisma.user.findUnique({ where: { id: session.user.id } });
         if (!user) {
             return {
                 success: false,
@@ -79,7 +79,7 @@ export async function getFitbitSyncStatus(): Promise<SyncStatusResponse> {
  */
 export async function triggerAutoSync(): Promise<SyncResultResponse> {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
         return {
             success: false,
             synced: false,
@@ -89,7 +89,7 @@ export async function triggerAutoSync(): Promise<SyncResultResponse> {
     }
 
     try {
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        const user = await prisma.user.findUnique({ where: { id: session.user.id } });
         if (!user) {
             return {
                 success: false,
@@ -124,7 +124,7 @@ export async function triggerAutoSync(): Promise<SyncResultResponse> {
  */
 export async function manualFitbitSync(days: number = 7): Promise<SyncResultResponse> {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
         return {
             success: false,
             synced: false,
@@ -134,7 +134,7 @@ export async function manualFitbitSync(days: number = 7): Promise<SyncResultResp
     }
 
     try {
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        const user = await prisma.user.findUnique({ where: { id: session.user.id } });
         if (!user) {
             return {
                 success: false,

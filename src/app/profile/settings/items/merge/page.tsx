@@ -60,6 +60,7 @@ export default function MergeItemsPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url); // メモリリーク対策
         toast.dismiss(toastId);
     };
 

@@ -26,10 +26,10 @@ export interface TrendsResponse {
 
 export async function getTrendsData(): Promise<TrendsResponse> {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return { success: false, availableKeys: [], records: [], error: "Unauthorized" };
+    if (!session?.user?.id) return { success: false, availableKeys: [], records: [], error: "Unauthorized" };
 
     try {
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        const user = await prisma.user.findUnique({ where: { id: session.user.id } });
         if (!user) return { success: false, availableKeys: [], records: [], error: "User not found" };
 
         // Fetch Hospital Records

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, ChevronDown, FileText, Table, Activity, Calendar } from 'lucide-react';
+import { Download, ChevronDown, FileText, Table, Activity, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -33,6 +33,16 @@ interface ExportDataButtonProps {
     showRecords?: boolean;
     showHabits?: boolean;
 }
+
+// 期間の定義
+type PeriodKey = 'week' | 'threeMonths' | 'halfYear' | 'year' | 'all';
+const PERIODS: { key: PeriodKey; label: string; days: number | null; weeksLabel: string }[] = [
+    { key: 'week', label: '過去1週間', days: 7, weeksLabel: '1週間' },
+    { key: 'threeMonths', label: '過去3ヶ月', days: 90, weeksLabel: '約13週' },
+    { key: 'halfYear', label: '過去半年', days: 182, weeksLabel: '約26週' },
+    { key: 'year', label: '過去1年', days: 365, weeksLabel: '52週' },
+    { key: 'all', label: '全期間', days: null, weeksLabel: '全期間' },
+];
 
 export default function ExportDataButton({
     records = [],
@@ -91,40 +101,96 @@ export default function ExportDataButton({
         return lines.join('\n').trim();
     };
 
-    // 習慣データをCSV形式にエクスポート
-    const exportHabitsCSV = (period: 'year' | 'all') => {
+    // 週平均を計算する関数
+    const calculateWeeklyAverage = (habit: Habit, startDate: Date | null): { avg: number; hasData: boolean } => {
+        const now = new Date();
+        const filteredRecords = habit.records.filter((r) => {
+            if (!startDate) return true; // 全期間
+            const recordDate = new Date(r.date);
+            return recordDate >= startDate && recordDate <= now;
+        });
+
+        if (filteredRecords.length === 0) {
+            return { avg: 0, hasData: false };
+        }
+
+        // 合計値を計算
+        const total = filteredRecords.reduce((sum, r) => sum + (r.value ?? 0), 0);
+
+        // 期間の週数を計算
+        let weeks: number;
+        if (startDate) {
+            const diffDays = Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+            weeks = Math.max(1, diffDays / 7);
+        } else {
+            // 全期間: 最初の記録から現在まで
+            const dates = filteredRecords.map(r => new Date(r.date).getTime());
+            const minDate = Math.min(...dates);
+            const diffDays = Math.ceil((now.getTime() - minDate) / (1000 * 60 * 60 * 24));
+            weeks = Math.max(1, diffDays / 7);
+        }
+
+        return { avg: total / weeks, hasData: true };
+    };
+
+    // 習慣データを週平均テキスト形式でエクスポート
+    const exportHabitsWeeklyAverage = () => {
         if (habits.length === 0) {
             toast.error('習慣データがありません');
             setShowMenu(false);
             return;
         }
 
-        let csv = '習慣,日付,値\n';
-        habits.forEach((habit) => {
-            const records = period === 'year'
-                ? habit.records.filter((r) => {
-                    const recordDate = new Date(r.date);
-                    const oneYearAgo = new Date();
-                    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-                    return recordDate >= oneYearAgo;
-                })
-                : habit.records;
+        const now = new Date();
+        const lines: string[] = [];
+        lines.push('【習慣 週平均サマリー】');
+        lines.push(`出力日時: ${format(now, 'yyyy/MM/dd HH:mm')}`);
+        lines.push('');
 
-            records.forEach((record) => {
-                const dateStr = new Date(record.date).toISOString().split('T')[0];
-                const value = record.value ?? '';
-                csv += `${habit.name},${dateStr},${value}\n`;
+        PERIODS.forEach((period) => {
+            let startDate: Date | null = null;
+            if (period.days !== null) {
+                startDate = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
+            }
+
+            // この期間にデータがある習慣のみ抽出
+            const habitsWithData: { name: string; avg: number; unit: string | null; type: string }[] = [];
+
+            habits.forEach((habit) => {
+                const { avg, hasData } = calculateWeeklyAverage(habit, startDate);
+                if (hasData) {
+                    habitsWithData.push({
+                        name: habit.name,
+                        avg,
+                        unit: habit.unit,
+                        type: habit.type,
+                    });
+                }
             });
+
+            if (habitsWithData.length > 0) {
+                lines.push(`＜${period.label}（${period.weeksLabel}）＞`);
+                habitsWithData.forEach((h) => {
+                    const avgFormatted = h.avg % 1 === 0 ? h.avg.toString() : h.avg.toFixed(1);
+                    if (h.type === 'yes_no') {
+                        lines.push(`${h.name}: ${avgFormatted}回/週`);
+                    } else {
+                        lines.push(`${h.name}: ${avgFormatted}${h.unit || ''}/週`);
+                    }
+                });
+                lines.push('');
+            }
         });
 
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `習慣記録_${period === 'year' ? '過去1年' : 'すべて'}.csv`;
-        link.click();
+        const text = lines.join('\n').trim();
 
-        toast.success(`習慣データを${period === 'year' ? '過去1年分' : 'すべて'}エクスポートしました`);
-        setShowMenu(false);
+        navigator.clipboard.writeText(text).then(() => {
+            toast.success('週平均データをコピーしました');
+            setShowMenu(false);
+        }).catch(() => {
+            toast.error('コピーに失敗しました');
+            setShowMenu(false);
+        });
     };
 
     // 診断記録をコピー
@@ -214,18 +280,11 @@ export default function ExportDataButton({
                                     習慣記録
                                 </div>
                                 <button
-                                    onClick={() => exportHabitsCSV('year')}
-                                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
-                                >
-                                    <Calendar className="w-4 h-4 text-purple-500" />
-                                    過去1年
-                                </button>
-                                <button
-                                    onClick={() => exportHabitsCSV('all')}
+                                    onClick={() => exportHabitsWeeklyAverage()}
                                     className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 transition-colors"
                                 >
                                     <Activity className="w-4 h-4 text-emerald-500" />
-                                    すべて
+                                    週平均サマリー
                                 </button>
                             </>
                         )}

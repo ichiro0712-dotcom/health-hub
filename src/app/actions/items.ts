@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
+// 型定義
 export interface UniqueItem {
     id: number;
     name: string;
@@ -18,13 +19,28 @@ export interface MergeHistory {
     canUndo: boolean;
 }
 
+interface HealthCheckResult {
+    item?: string;
+    name?: string;
+    value?: string | number;
+    unit?: string;
+    referenceRange?: string;
+    evaluation?: string;
+}
+
+interface HealthRecordData {
+    results?: HealthCheckResult[];
+}
+
+interface MergeHistoryDetails {
+    victimName: string;
+}
+
 // Helper to get authenticated user ID
-async function getUserId() {
+async function getUserId(): Promise<string | null> {
     const session = await getServerSession(authOptions);
     const userEmail = session?.user?.email;
 
-    // Always prefer DB lookup by email to ensure we have the correct current ID
-    // (Session ID might be stale after DB resets)
     if (userEmail) {
         const user = await prisma.user.findUnique({
             where: { email: userEmail },
@@ -33,7 +49,9 @@ async function getUserId() {
         if (user) return user.id;
     }
 
-    return (session?.user as any)?.id;
+    // session.user.id が存在する場合のみ返す
+    const userId = session?.user?.id;
+    return typeof userId === 'string' ? userId : null;
 }
 
 /**
@@ -73,16 +91,16 @@ export async function getUniqueItems(): Promise<{ success: boolean; data?: Uniqu
 
         // 3. Count items (applying mapping)
         records.forEach(record => {
-            const data = record.data as any;
-            let results = [];
+            const data = record.data as HealthRecordData | HealthCheckResult[];
+            let results: HealthCheckResult[] = [];
             if (Array.isArray(data)) {
                 results = data;
             } else if (data?.results && Array.isArray(data.results)) {
                 results = data.results;
             }
 
-            results.forEach((r: any) => {
-                const rawName = r.item?.trim();
+            results.forEach((r: HealthCheckResult) => {
+                const rawName = (r.item || r.name)?.trim();
                 if (rawName) {
                     // Apply Virtual Mapping here!
                     const displayName = mapping[rawName] || rawName;
@@ -243,8 +261,6 @@ export async function mergeItems(pairs: { survivorId: number, victimId: number }
         const itemsMap = new Map<number, string>();
         currentItemsRes.data.forEach(i => itemsMap.set(i.id, i.name));
 
-        const prismaClient = prisma as any;
-
         for (const pair of pairs) {
             const survivorName = itemsMap.get(pair.survivorId);
             const victimName = itemsMap.get(pair.victimId);
@@ -299,12 +315,15 @@ export async function mergeItems(pairs: { survivorId: number, victimId: number }
                     where: { inspectionItemId: victimsItem.id }
                 });
 
-                for (const alias of victimsAliases) {
-                    await prisma.inspectionItemAlias.update({
-                        where: { id: alias.id },
+                if (victimsAliases.length > 0) {
+                    // N+1クエリ問題修正: バッチ更新を使用
+                    await prisma.inspectionItemAlias.updateMany({
+                        where: { id: { in: victimsAliases.map(a => a.id) } },
                         data: { inspectionItemId: survivorItem.id }
                     });
-                    logs.push(`  -> Re-pointed alias '${alias.originalName}' to '${survivorName}'`);
+                    victimsAliases.forEach(alias => {
+                        logs.push(`  -> Re-pointed alias '${alias.originalName}' to '${survivorName}'`);
+                    });
                 }
             }
 
@@ -369,12 +388,15 @@ export async function getMergeHistory(): Promise<MergeHistory[]> {
         include: { item: true }
     });
 
-    return history.map(h => ({
-        id: h.id,
-        date: h.createdAt,
-        description: `Merged '${(h.details as any).victimName}' into '${h.item.name}'`,
-        canUndo: true
-    }));
+    return history.map(h => {
+        const details = h.details as unknown as MergeHistoryDetails;
+        return {
+            id: h.id,
+            date: h.createdAt,
+            description: `Merged '${details?.victimName || 'unknown'}' into '${h.item.name}'`,
+            canUndo: true
+        };
+    });
 }
 
 export async function undoMerge(historyId: string): Promise<{ success: boolean; error?: string }> {
@@ -389,8 +411,8 @@ export async function undoMerge(historyId: string): Promise<{ success: boolean; 
 
         if (!history) return { success: false, error: 'History not found' };
 
-        const details = history.details as any;
-        const victimName = details.victimName;
+        const details = history.details as unknown as MergeHistoryDetails;
+        const victimName = details?.victimName;
 
         if (victimName) {
             // Undo Logic: 
@@ -452,8 +474,8 @@ export async function getExportData(mode: 'original' | 'integrated'): Promise<{ 
 
         // 3. Flatten Data
         for (const record of records) {
-            const data = record.data as any;
-            let results: any[] = [];
+            const data = record.data as HealthRecordData | HealthCheckResult[];
+            let results: HealthCheckResult[] = [];
 
             if (Array.isArray(data)) {
                 results = data;
@@ -462,7 +484,7 @@ export async function getExportData(mode: 'original' | 'integrated'): Promise<{ 
             }
 
             for (const r of results) {
-                let name = r.item?.trim();
+                let name = (r.item || r.name)?.trim();
                 if (!name) continue;
 
                 // Apply mapping if integrated mode
@@ -474,9 +496,9 @@ export async function getExportData(mode: 'original' | 'integrated'): Promise<{ 
                     id: record.id,
                     date: record.date.toISOString().split('T')[0],
                     itemName: name,
-                    value: r.value?.toString() || '',
-                    unit: r.unit || '',
-                    refRange: r.referenceRange || ''
+                    value: r.value?.toString() ?? '',
+                    unit: r.unit ?? '',
+                    refRange: r.referenceRange ?? ''
                 });
             }
         }

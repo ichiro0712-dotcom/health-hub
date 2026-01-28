@@ -20,20 +20,18 @@ interface HealthRecordInput {
 export async function saveHealthRecord(data: HealthRecordInput) {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
         return { success: false, error: "Unauthorized" };
     }
 
-    // Ensure user exists, create if not (auto-registration for saving data)
-    const user = await prisma.user.upsert({
-        where: { email: session.user.email },
-        update: {},
-        create: {
-            email: session.user.email,
-            name: session.user.name || "User",
-            image: session.user.image
-        }
+    // Get user by ID (user should already exist if authenticated)
+    const user = await prisma.user.findUnique({
+        where: { id: session.user.id }
     });
+
+    if (!user) {
+        return { success: false, error: "User not found" };
+    }
 
     try {
         // 0. Process & Normalize Items - CRITICAL: Apply normalization BEFORE saving
@@ -113,27 +111,25 @@ export async function saveHealthRecord(data: HealthRecordInput) {
             }
         });
 
-        // Google Docsに自動同期（バックグラウンドで実行、エラーは無視）
-        prisma.healthRecord.findMany({
-            where: { userId: user.id },
-            orderBy: { date: 'desc' },
-            select: { id: true, date: true, title: true, summary: true, data: true, additional_data: true }
-        }).then(records => {
-            syncRecordsToGoogleDocs(records).catch(err => {
+        // Google Docsに自動同期（バックグラウンドで実行）
+        // 非同期で実行するが、即座に実行を開始する
+        (async () => {
+            try {
+                const records = await prisma.healthRecord.findMany({
+                    where: { userId: user.id },
+                    orderBy: { date: 'desc' },
+                    select: { id: true, date: true, title: true, summary: true, data: true, additional_data: true }
+                });
+                await syncRecordsToGoogleDocs(records);
+            } catch (err) {
                 console.error('Google Docs sync failed:', err);
-            });
-        });
+            }
+        })();
 
         return { success: true };
 
     } catch (error) {
         console.error("Save Record Error:", error);
-        // Debug logging
-        try {
-            const fs = require('fs');
-            fs.writeFileSync('debug_error.log', `Error at ${new Date().toISOString()}:\n${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}\n\n`, { flag: 'a' });
-        } catch (e) { console.error("Log failed", e); }
-
         return { success: false, error: `保存エラー: ${error instanceof Error ? error.message : "不明なエラー"}` };
     }
 }

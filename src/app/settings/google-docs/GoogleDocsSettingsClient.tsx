@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, Save, RefreshCw, ExternalLink, Loader2, Check, ArrowLeft } from 'lucide-react';
+import { FileText, Save, RefreshCw, ExternalLink, Loader2, Check, ArrowLeft, Edit2, X } from 'lucide-react';
 import Header from '@/components/Header';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -15,20 +15,68 @@ interface Props {
     initialSettings?: GoogleDocsSettingsData | null;
 }
 
+// Google DocsのURLからDocument IDを抽出
+function extractDocId(url: string): string | null {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : null;
+}
+
 export default function GoogleDocsSettingsClient({ initialSettings }: Props) {
     const [recordsHeaderText, setRecordsHeaderText] = useState(initialSettings?.recordsHeaderText || '');
     const [profileHeaderText, setProfileHeaderText] = useState(initialSettings?.profileHeaderText || '');
+    const [recordsDocId, setRecordsDocId] = useState(initialSettings?.recordsDocId || '1qCYtdo40Adk_-cG8vcwPkwlPW6NKHq97zeIX-EB0F3Y');
+    const [profileDocId, setProfileDocId] = useState(initialSettings?.profileDocId || '1sHZtZpcFE3Gv8IT8AZZftk3xnCCOUcVwfkC9NuzRanA');
+    const [editingRecordsUrl, setEditingRecordsUrl] = useState(false);
+    const [editingProfileUrl, setEditingProfileUrl] = useState(false);
+    const [tempRecordsUrl, setTempRecordsUrl] = useState('');
+    const [tempProfileUrl, setTempProfileUrl] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
 
-    const recordsDocUrl = `https://docs.google.com/document/d/${initialSettings?.recordsDocId || '1qCYtdo40Adk_-cG8vcwPkwlPW6NKHq97zeIX-EB0F3Y'}`;
-    const profileDocUrl = `https://docs.google.com/document/d/${initialSettings?.profileDocId || '1sHZtZpcFE3Gv8IT8AZZftk3xnCCOUcVwfkC9NuzRanA'}`;
+    const recordsDocUrl = `https://docs.google.com/document/d/${recordsDocId}`;
+    const profileDocUrl = `https://docs.google.com/document/d/${profileDocId}`;
+
+    const handleEditRecordsUrl = () => {
+        setTempRecordsUrl(recordsDocUrl);
+        setEditingRecordsUrl(true);
+    };
+
+    const handleSaveRecordsUrl = () => {
+        const docId = extractDocId(tempRecordsUrl);
+        if (docId) {
+            setRecordsDocId(docId);
+            setHasChanges(true);
+            toast.success('URLを更新しました');
+        } else {
+            toast.error('有効なGoogle DocsのURLを入力してください');
+        }
+        setEditingRecordsUrl(false);
+    };
+
+    const handleEditProfileUrl = () => {
+        setTempProfileUrl(profileDocUrl);
+        setEditingProfileUrl(true);
+    };
+
+    const handleSaveProfileUrl = () => {
+        const docId = extractDocId(tempProfileUrl);
+        if (docId) {
+            setProfileDocId(docId);
+            setHasChanges(true);
+            toast.success('URLを更新しました');
+        } else {
+            toast.error('有効なGoogle DocsのURLを入力してください');
+        }
+        setEditingProfileUrl(false);
+    };
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
             const result = await saveGoogleDocsSettings({
+                recordsDocId: recordsDocId || null,
+                profileDocId: profileDocId || null,
                 recordsHeaderText: recordsHeaderText || null,
                 profileHeaderText: profileHeaderText || null,
             });
@@ -113,16 +161,52 @@ export default function GoogleDocsSettingsClient({ initialSettings }: Props) {
                                 健康診断の記録を同期
                             </p>
                         </div>
-                        <a
-                            href={recordsDocUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        <button
+                            onClick={handleEditRecordsUrl}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                         >
-                            <ExternalLink className="w-4 h-4" />
-                            開く
-                        </a>
+                            <Edit2 className="w-4 h-4" />
+                            リンク先編集
+                        </button>
                     </div>
+
+                    {editingRecordsUrl && (
+                        <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-600">
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                同期先Google DocsのURL
+                            </label>
+                            <input
+                                type="text"
+                                value={tempRecordsUrl}
+                                onChange={(e) => setTempRecordsUrl(e.target.value)}
+                                placeholder="https://docs.google.com/document/d/..."
+                                className="w-full p-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800"
+                            />
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    onClick={handleSaveRecordsUrl}
+                                    className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                                >
+                                    保存
+                                </button>
+                                <button
+                                    onClick={() => setEditingRecordsUrl(false)}
+                                    className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600"
+                                >
+                                    キャンセル
+                                </button>
+                                <a
+                                    href={recordsDocUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                                >
+                                    <ExternalLink className="w-3 h-3" />
+                                    開く
+                                </a>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="space-y-3">
                         <label className="block">
@@ -147,22 +231,58 @@ export default function GoogleDocsSettingsClient({ initialSettings }: Props) {
                     <div className="flex items-start justify-between mb-4">
                         <div>
                             <h2 className="font-bold text-slate-800 dark:text-white">
-                                健康プロフィール
+                                健康プロフィール/習慣
                             </h2>
                             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                健康プロフィール情報を同期
+                                健康プロフィールと習慣データを同期
                             </p>
                         </div>
-                        <a
-                            href={profileDocUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        <button
+                            onClick={handleEditProfileUrl}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                         >
-                            <ExternalLink className="w-4 h-4" />
-                            開く
-                        </a>
+                            <Edit2 className="w-4 h-4" />
+                            リンク先編集
+                        </button>
                     </div>
+
+                    {editingProfileUrl && (
+                        <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-600">
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                同期先Google DocsのURL
+                            </label>
+                            <input
+                                type="text"
+                                value={tempProfileUrl}
+                                onChange={(e) => setTempProfileUrl(e.target.value)}
+                                placeholder="https://docs.google.com/document/d/..."
+                                className="w-full p-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800"
+                            />
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    onClick={handleSaveProfileUrl}
+                                    className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                                >
+                                    保存
+                                </button>
+                                <button
+                                    onClick={() => setEditingProfileUrl(false)}
+                                    className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600"
+                                >
+                                    キャンセル
+                                </button>
+                                <a
+                                    href={profileDocUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                                >
+                                    <ExternalLink className="w-3 h-3" />
+                                    開く
+                                </a>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="space-y-3">
                         <label className="block">

@@ -2,6 +2,24 @@ import { google } from 'googleapis';
 import path from 'path';
 import fs from 'fs';
 
+/**
+ * Google Docsに挿入するテキストをサニタイズ
+ * 制御文字やフォーマット破壊文字を除去
+ */
+function sanitizeForGoogleDocs(text: string | null | undefined): string {
+    if (!text) return '';
+    return text
+        // 制御文字を除去（改行とタブは保持）
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        // 特殊なUnicode文字を正規化
+        .normalize('NFC')
+        // 長すぎる行を防ぐ（Google Docsの制限）
+        .split('\n')
+        .map(line => line.length > 10000 ? line.substring(0, 10000) + '...' : line)
+        .join('\n')
+        .trim();
+}
+
 // Document IDs
 const RECORDS_DOC_ID = '1qCYtdo40Adk_-cG8vcwPkwlPW6NKHq97zeIX-EB0F3Y';
 const HEALTH_PROFILE_DOC_ID = '1sHZtZpcFE3Gv8IT8AZZftk3xnCCOUcVwfkC9NuzRanA';
@@ -114,27 +132,27 @@ function formatRecordText(record: {
     const meta = record.additional_data || {};
     const results = record.data?.results || (Array.isArray(record.data) ? record.data : []);
 
-    // ヘッダー（詳細ページと同じ形式）
+    // ヘッダー（詳細ページと同じ形式）- サニタイズ適用
     lines.push(`＜${formatDate(new Date(record.date))} 診断ファイル詳細＞`);
     if (record.title) {
-        lines.push(`タイトル: ${record.title}`);
+        lines.push(`タイトル: ${sanitizeForGoogleDocs(record.title)}`);
     }
     if (meta.hospitalName) {
-        lines.push(`病院名: ${meta.hospitalName}`);
+        lines.push(`病院名: ${sanitizeForGoogleDocs(meta.hospitalName)}`);
     }
     if (record.summary) {
-        lines.push(`要点: ${record.summary}`);
+        lines.push(`要点: ${sanitizeForGoogleDocs(record.summary)}`);
     }
     lines.push('');
 
-    // 検査結果（詳細ページと同じ形式）
+    // 検査結果（詳細ページと同じ形式）- サニタイズ適用
     if (results.length > 0) {
         lines.push(`[検査結果]`);
         results.forEach((item: any) => {
-            const name = item.item || item.name || '';
-            const value = item.value || '';
-            const unit = item.unit || '';
-            const evaluation = item.evaluation || '';
+            const name = sanitizeForGoogleDocs(item.item || item.name || '');
+            const value = sanitizeForGoogleDocs(String(item.value || ''));
+            const unit = sanitizeForGoogleDocs(item.unit || '');
+            const evaluation = sanitizeForGoogleDocs(item.evaluation || '');
 
             const evalStr = evaluation ? ` (${evaluation})` : '';
             const unitStr = unit ? ` ${unit}` : '';
@@ -143,14 +161,14 @@ function formatRecordText(record: {
         lines.push('');
     }
 
-    // セクション（メモ・記録）- 詳細ページと同じ形式
+    // セクション（メモ・記録）- 詳細ページと同じ形式 - サニタイズ適用
     const sections = meta.sections || [];
     if (sections.length > 0) {
         sections.forEach((sec: any) => {
             if (sec.title || sec.content) {
-                lines.push(`[${sec.title || 'メモ'}]`);
+                lines.push(`[${sanitizeForGoogleDocs(sec.title) || 'メモ'}]`);
                 if (sec.content) {
-                    lines.push(sec.content);
+                    lines.push(sanitizeForGoogleDocs(sec.content));
                 }
                 lines.push('');
             }
@@ -159,22 +177,22 @@ function formatRecordText(record: {
         // レガシー形式のメモ対応
         if (meta.notes_list && Array.isArray(meta.notes_list)) {
             meta.notes_list.forEach((note: any) => {
-                lines.push(`[${note.title || 'メモ'}]`);
+                lines.push(`[${sanitizeForGoogleDocs(note.title) || 'メモ'}]`);
                 if (note.content) {
-                    lines.push(note.content);
+                    lines.push(sanitizeForGoogleDocs(note.content));
                 }
                 lines.push('');
             });
         } else if (meta.notes) {
             lines.push(`[メモ]`);
-            lines.push(meta.notes);
+            lines.push(sanitizeForGoogleDocs(meta.notes));
             lines.push('');
         }
 
         // 所見
         if (meta.findings) {
             lines.push(`[所見]`);
-            lines.push(meta.findings);
+            lines.push(sanitizeForGoogleDocs(meta.findings));
             lines.push('');
         }
     }
@@ -236,6 +254,106 @@ export async function syncRecordsToGoogleDocs(
     }
 }
 
+// 習慣データの型定義
+interface HabitData {
+    id: string;
+    name: string;
+    type: 'yes_no' | 'numeric';
+    unit: string | null;
+    records: Array<{
+        date: Date;
+        value: number | null;
+    }>;
+}
+
+// 期間の定義
+type PeriodKey = 'week' | 'threeMonths' | 'halfYear' | 'year' | 'all';
+const PERIODS: { key: PeriodKey; label: string; days: number | null; weeksLabel: string }[] = [
+    { key: 'week', label: '過去1週間', days: 7, weeksLabel: '1週間' },
+    { key: 'threeMonths', label: '過去3ヶ月', days: 90, weeksLabel: '約13週' },
+    { key: 'halfYear', label: '過去半年', days: 182, weeksLabel: '約26週' },
+    { key: 'year', label: '過去1年', days: 365, weeksLabel: '52週' },
+    { key: 'all', label: '全期間', days: null, weeksLabel: '全期間' },
+];
+
+// 週平均を計算する関数
+function calculateWeeklyAverage(habit: HabitData, startDate: Date | null): { avg: number; hasData: boolean } {
+    const now = new Date();
+    const filteredRecords = habit.records.filter((r) => {
+        if (!startDate) return true;
+        const recordDate = new Date(r.date);
+        return recordDate >= startDate && recordDate <= now;
+    });
+
+    if (filteredRecords.length === 0) {
+        return { avg: 0, hasData: false };
+    }
+
+    const total = filteredRecords.reduce((sum, r) => sum + (r.value ?? 0), 0);
+
+    let weeks: number;
+    if (startDate) {
+        const diffDays = Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        weeks = Math.max(1, diffDays / 7);
+    } else {
+        const dates = filteredRecords.map(r => new Date(r.date).getTime());
+        const minDate = Math.min(...dates);
+        const diffDays = Math.ceil((now.getTime() - minDate) / (1000 * 60 * 60 * 24));
+        weeks = Math.max(1, diffDays / 7);
+    }
+
+    return { avg: total / weeks, hasData: true };
+}
+
+// 習慣データを週平均テキスト形式にフォーマット
+function formatHabitsWeeklyAverage(habits: HabitData[]): string {
+    if (habits.length === 0) {
+        return '';
+    }
+
+    const now = new Date();
+    const lines: string[] = [];
+    lines.push('【習慣 週平均サマリー】');
+    lines.push(`出力日時: ${formatDateTime(now)}`);
+    lines.push('');
+
+    PERIODS.forEach((period) => {
+        let startDate: Date | null = null;
+        if (period.days !== null) {
+            startDate = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
+        }
+
+        const habitsWithData: { name: string; avg: number; unit: string | null; type: string }[] = [];
+
+        habits.forEach((habit) => {
+            const { avg, hasData } = calculateWeeklyAverage(habit, startDate);
+            if (hasData) {
+                habitsWithData.push({
+                    name: habit.name,
+                    avg,
+                    unit: habit.unit,
+                    type: habit.type,
+                });
+            }
+        });
+
+        if (habitsWithData.length > 0) {
+            lines.push(`＜${period.label}（${period.weeksLabel}）＞`);
+            habitsWithData.forEach((h) => {
+                const avgFormatted = h.avg % 1 === 0 ? h.avg.toString() : h.avg.toFixed(1);
+                if (h.type === 'yes_no') {
+                    lines.push(`${h.name}: ${avgFormatted}回/週`);
+                } else {
+                    lines.push(`${h.name}: ${avgFormatted}${h.unit || ''}/週`);
+                }
+            });
+            lines.push('');
+        }
+    });
+
+    return lines.join('\n').trim();
+}
+
 // Sync health profile to Google Docs
 export async function syncHealthProfileToGoogleDocs(
     sections: Array<{
@@ -244,7 +362,8 @@ export async function syncHealthProfileToGoogleDocs(
         content: string;
         orderIndex: number;
     }>,
-    headerText?: string
+    headerText?: string,
+    habits?: HabitData[]
 ) {
     try {
         const docs = getDocsClient();
@@ -260,7 +379,7 @@ export async function syncHealthProfileToGoogleDocs(
             lines.push('');
         }
 
-        lines.push('【健康プロフィール】');
+        lines.push('【健康プロフィール/習慣】');
         lines.push(`最終更新: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`);
         lines.push('');
         lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -278,6 +397,14 @@ export async function syncHealthProfileToGoogleDocs(
                 lines.push('---');
                 lines.push('');
             }
+        }
+
+        // 習慣データを追加
+        if (habits && habits.length > 0) {
+            lines.push('');
+            lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            lines.push('');
+            lines.push(formatHabitsWeeklyAverage(habits));
         }
 
         const content = lines.join('\n');

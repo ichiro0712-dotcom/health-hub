@@ -23,6 +23,7 @@ export default function ExportButton() {
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
+                URL.revokeObjectURL(url); // メモリリーク対策
                 toast.success("NotebookLM用にエクスポートしました！");
             } else {
                 showErrorToast("エクスポートに失敗しました");

@@ -1,25 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth"; // Adjust path if necessary
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
     try {
         // 1. Authentication Check
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
-        }
+        const userId = session.user.id;
 
         // 2. Parse Body
         const body = await req.json();
@@ -49,7 +41,7 @@ export async function POST(req: NextRequest) {
         const updatedRecord = await prisma.fitData.upsert({
             where: {
                 userId_date: {
-                    userId: user.id,
+                    userId: userId,
                     date: dateObj,
                 }
             },
@@ -66,7 +58,7 @@ export async function POST(req: NextRequest) {
                 syncedAt: new Date(),
             },
             create: {
-                userId: user.id,
+                userId: userId,
                 date: dateObj,
                 steps,
                 heartRate,

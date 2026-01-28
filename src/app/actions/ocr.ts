@@ -98,13 +98,25 @@ export async function processHealthCheckDocuments(imageUrls: string[]) {
     const text = response.text();
     const cleanedText = text.replace(/```json\n?|\n?```/g, "").trim();
 
-    const data = JSON.parse(cleanedText);
+    // JSON パース時のエラーハンドリング強化
+    let data;
+    try {
+      data = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error('JSON Parse Error:', parseError);
+      console.error('Raw response (first 500 chars):', cleanedText.substring(0, 500));
+      return {
+        success: false,
+        error: `AI応答のJSON解析に失敗しました。再度お試しください。`
+      };
+    }
+
     return { success: true, data };
 
   } catch (error) {
     console.error('OCR Error Details:', error);
-    // @ts-ignore
-    return { success: false, error: `Failed to process: ${error?.message || JSON.stringify(error)}` };
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `処理に失敗しました: ${errorMessage}` };
   }
 }
 
@@ -187,12 +199,24 @@ export async function parseHealthCheckText(text: string) {
     const responseText = response.text();
     const cleanedText = responseText.replace(/```json\n?|\n?```/g, "").trim();
 
-    const data = JSON.parse(cleanedText);
+    // JSON パース時のエラーハンドリング強化
+    let data;
+    try {
+      data = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error('JSON Parse Error:', parseError);
+      console.error('Raw response (first 500 chars):', cleanedText.substring(0, 500));
+      return {
+        success: false,
+        error: `AI応答のJSON解析に失敗しました。再度お試しください。`
+      };
+    }
+
     return { success: true, data };
 
   } catch (error) {
     console.error('Text Parse Error Details:', error);
-    // @ts-ignore
-    return { success: false, error: `Failed to parse: ${error?.message || JSON.stringify(error)}` };
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `解析に失敗しました: ${errorMessage}` };
   }
 }

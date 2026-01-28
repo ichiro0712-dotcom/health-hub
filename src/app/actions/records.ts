@@ -2,19 +2,15 @@
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { syncRecordsToGoogleDocs } from "@/lib/google-docs";
 
-const prisma = new PrismaClient();
-
 // Google Docsに記録を同期するヘルパー関数
-async function syncRecordsInBackground(userEmail: string) {
+async function syncRecordsInBackground(userId: string) {
     try {
         const records = await prisma.healthRecord.findMany({
-            where: {
-                user: { email: userEmail }
-            },
+            where: { userId },
             orderBy: { date: 'desc' },
             select: {
                 id: true,
@@ -33,13 +29,11 @@ async function syncRecordsInBackground(userEmail: string) {
 
 export async function getRecords() {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return { success: false, error: "Unauthorized" };
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
     try {
         const records = await prisma.healthRecord.findMany({
-            where: {
-                user: { email: session.user.email }
-            },
+            where: { userId: session.user.id },
             orderBy: { date: 'desc' }
         });
         return { success: true, data: records };
@@ -51,15 +45,14 @@ export async function getRecords() {
 
 export async function getRecord(id: string) {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return { success: false, error: "Unauthorized" };
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
     try {
         const record = await prisma.healthRecord.findUnique({
-            where: { id },
-            include: { user: true }
+            where: { id }
         });
 
-        if (!record || record.user.email !== session.user.email) {
+        if (!record || record.userId !== session.user.id) {
             return { success: false, error: "Not found" };
         }
 
@@ -72,23 +65,22 @@ export async function getRecord(id: string) {
 
 export async function deleteRecord(id: string) {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return { success: false, error: "Unauthorized" };
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
     try {
         // Verify ownership
         const record = await prisma.healthRecord.findUnique({
-            where: { id },
-            include: { user: true }
+            where: { id }
         });
 
-        if (!record || record.user.email !== session.user.email) {
+        if (!record || record.userId !== session.user.id) {
             return { success: false, error: "Not found or unauthorized" };
         }
 
         await prisma.healthRecord.delete({ where: { id } });
 
         // Google Docsに自動同期（バックグラウンド）
-        syncRecordsInBackground(session.user.email);
+        syncRecordsInBackground(session.user.id);
 
         return { success: true };
     } catch (error) {
@@ -98,36 +90,34 @@ export async function deleteRecord(id: string) {
 
 export async function updateRecord(id: string, data: any) {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return { success: false, error: "Unauthorized" };
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
     try {
         // Verify ownership
         const record = await prisma.healthRecord.findUnique({
-            where: { id },
-            include: { user: true }
+            where: { id }
         });
 
-        if (!record || record.user.email !== session.user.email) {
+        if (!record || record.userId !== session.user.id) {
             return { success: false, error: "Not found or unauthorized" };
         }
-
 
         await prisma.healthRecord.update({
             where: { id },
             data: {
                 date: new Date(data.date),
-                title: data.title, // Add title
-                summary: data.summary, // Add summary
+                title: data.title,
+                summary: data.summary,
                 data: { results: data.results },
                 additional_data: data.meta,
-                images: data.images // Add images support
+                images: data.images
             }
         });
         revalidatePath('/records');
         revalidatePath(`/records/${id}`);
 
         // Google Docsに自動同期（バックグラウンド）
-        syncRecordsInBackground(session.user.email);
+        syncRecordsInBackground(session.user.id);
 
         return { success: true };
     } catch (error) {

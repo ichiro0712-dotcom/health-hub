@@ -131,6 +131,19 @@ export default function HealthRecordForm({ initialData, onSubmit, onCancel, isMo
         }
     }, [initialData]);
 
+    // メモリリーク対策: コンポーネントのアンマウント時にObject URLを解放
+    useEffect(() => {
+        return () => {
+            sections.forEach(section => {
+                section.images.forEach(img => {
+                    if (img.file && img.url) {
+                        URL.revokeObjectURL(img.url);
+                    }
+                });
+            });
+        };
+    }, [sections]);
+
 
     // --- Parsign Logic ---
     const handleParseText = async () => {
@@ -309,6 +322,11 @@ export default function HealthRecordForm({ initialData, onSubmit, onCancel, isMo
     const removeImageFromSection = (sectionId: string, imageId: string) => {
         setSections(sections.map(s => {
             if (s.id === sectionId) {
+                // メモリリーク対策: 削除する画像のObject URLを解放
+                const imageToRemove = s.images.find(img => img.id === imageId);
+                if (imageToRemove?.url && imageToRemove.file) {
+                    URL.revokeObjectURL(imageToRemove.url);
+                }
                 return { ...s, images: s.images.filter(img => img.id !== imageId) };
             }
             return s;

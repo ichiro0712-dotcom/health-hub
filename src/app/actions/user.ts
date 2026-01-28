@@ -2,19 +2,15 @@
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { DashboardResponse } from "@/types/dashboard";
-import { PrismaClient } from "@prisma/client";
-
-// Ensure Prisma Client is generated: npx prisma generate
-const prisma = new PrismaClient();
+import prisma from "@/lib/prisma";
 
 export async function getUserProfile() {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return { success: false, error: "Unauthorized" };
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
     try {
         const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
+            where: { id: session.user.id },
             select: { name: true, birthDate: true }
         });
         return { success: true, data: user };
@@ -26,17 +22,12 @@ export async function getUserProfile() {
 
 export async function updateUserProfile(data: { name?: string; birthDate?: string }) {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return { success: false, error: "Unauthorized" };
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
     try {
-        await prisma.user.upsert({
-            where: { email: session.user.email },
-            update: {
-                name: data.name,
-                birthDate: data.birthDate ? new Date(data.birthDate) : null
-            },
-            create: {
-                email: session.user.email,
+        await prisma.user.update({
+            where: { id: session.user.id },
+            data: {
                 name: data.name,
                 birthDate: data.birthDate ? new Date(data.birthDate) : null
             }

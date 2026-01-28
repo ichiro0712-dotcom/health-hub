@@ -7,20 +7,12 @@ import prisma from '@/lib/prisma';
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
-        }
-
         const habits = await prisma.habit.findMany({
-            where: { userId: user.id },
+            where: { userId: session.user.id },
             orderBy: { order: 'asc' },
             include: {
                 records: {
@@ -41,16 +33,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { name, type, unit, color } = await request.json();
@@ -70,7 +54,7 @@ export async function POST(request: NextRequest) {
 
         // 最大orderを取得して+1
         const maxOrderHabit = await prisma.habit.findFirst({
-            where: { userId: user.id },
+            where: { userId: session.user.id },
             orderBy: { order: 'desc' },
         });
 
@@ -78,7 +62,7 @@ export async function POST(request: NextRequest) {
 
         const habit = await prisma.habit.create({
             data: {
-                userId: user.id,
+                userId: session.user.id,
                 name,
                 type,
                 unit: unit || null,
@@ -98,16 +82,8 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user?.email) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { email: session.user.email },
-        });
-
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
         const { habitIds } = await request.json(); // 新しい順序の配列
@@ -120,7 +96,7 @@ export async function PATCH(request: NextRequest) {
         await prisma.$transaction(
             habitIds.map((habitId: string, index: number) =>
                 prisma.habit.update({
-                    where: { id: habitId, userId: user.id },
+                    where: { id: habitId, userId: session.user.id },
                     data: { order: index },
                 })
             )

@@ -20,10 +20,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 開発環境またはadminユーザーのみ許可
-    if (process.env.NODE_ENV === 'production') {
-      // 本番環境では管理者のみ許可するロジックを追加
-      // 現時点では開発環境のみ許可
+    // 管理者のみ許可（環境変数で管理者メールを設定）
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
+    const userEmail = session.user.email?.toLowerCase();
+
+    if (!userEmail || !adminEmails.includes(userEmail)) {
+      return NextResponse.json(
+        { success: false, error: '管理者権限が必要です' },
+        { status: 403 }
+      );
     }
 
     // リクエストボディからバックアップデータを取得
@@ -124,6 +129,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: '認証が必要です' },
         { status: 401 }
+      );
+    }
+
+    // 管理者のみ許可
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
+    const userEmail = session.user.email?.toLowerCase();
+
+    if (!userEmail || !adminEmails.includes(userEmail)) {
+      return NextResponse.json(
+        { success: false, error: '管理者権限が必要です' },
+        { status: 403 }
       );
     }
 
