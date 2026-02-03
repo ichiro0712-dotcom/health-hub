@@ -123,9 +123,23 @@ export async function exchangeCodeForTokens(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    console.error('Token exchange failed:', error);
-    throw new Error(error.errors?.[0]?.message || 'Failed to exchange authorization code');
+    const errorText = await response.text();
+    console.error('Token exchange failed - Status:', response.status);
+    console.error('Token exchange failed - Response:', errorText);
+    console.error('Token exchange failed - Request params:', {
+      client_id: config.clientId,
+      redirect_uri: config.redirectUri,
+      code_length: code?.length,
+      code_verifier_length: codeVerifier?.length,
+    });
+
+    let errorData;
+    try {
+      errorData = JSON.parse(errorText);
+    } catch {
+      throw new Error(`Token exchange failed: ${response.status} - ${errorText}`);
+    }
+    throw new Error(errorData.errors?.[0]?.message || `Failed to exchange authorization code: ${response.status}`);
   }
 
   return response.json();

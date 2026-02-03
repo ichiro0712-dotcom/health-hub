@@ -71,11 +71,21 @@ export async function GET(request: NextRequest) {
 
     // Exchange code for tokens
     const config = getOAuthConfig();
+    console.log('Fitbit OAuth callback - exchanging code for tokens');
+    console.log('Config:', {
+      clientId: config.clientId,
+      redirectUri: config.redirectUri,
+      hasClientSecret: !!config.clientSecret,
+      clientSecretLength: config.clientSecret?.length,
+    });
+    console.log('Code verifier length:', fitbitAccount.codeVerifier?.length);
+
     const tokens = await exchangeCodeForTokens(
       code,
       fitbitAccount.codeVerifier,
       config
     );
+    console.log('Token exchange successful, user_id:', tokens.user_id);
 
     // Update FitbitAccount with real tokens
     await prisma.fitbitAccount.update({
