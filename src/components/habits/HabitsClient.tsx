@@ -437,8 +437,8 @@ export default function HabitsClient() {
 
             {/* 数値入力モーダル */}
             {numericInputModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-sm w-full p-6">
+                <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 p-4 pt-20 sm:pt-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-sm w-full p-6 mb-auto sm:mb-0">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold text-slate-800 dark:text-white">
                                 {numericInputModal.habit.name}
@@ -514,8 +514,8 @@ export default function HabitsClient() {
 
             {/* 編集モーダル */}
             {editModalHabit && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 p-4 pt-12 sm:pt-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto mb-auto sm:mb-0">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xl font-bold text-slate-800 dark:text-white">習慣を編集</h3>
                             <button
@@ -629,8 +629,8 @@ export default function HabitsClient() {
 
             {/* 新規追加モーダル */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 p-4 pt-12 sm:pt-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto mb-auto sm:mb-0">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xl font-bold text-slate-800 dark:text-white">新しい習慣</h3>
                             <button
