@@ -258,10 +258,10 @@ export default function ReportClient({ userEmail }: ReportClientProps) {
             <div className="mb-6">
                 <div className="mb-4">
                     <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                        Healthレポート
+                        ヘルススコア
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                        健康プロフィールと診断記録を基にした分析結果
+                        健康プロフィールと診断記録を基にしたスコア分析
                     </p>
                 </div>
                 {/* モバイル：縦並び、PC：横並び */}

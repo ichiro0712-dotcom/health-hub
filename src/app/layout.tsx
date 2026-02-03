@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   themeColor: "#0f172a",
 };
 
-import BottomNav from "@/components/BottomNav";
+import FloatingMenu from "@/components/FloatingMenu";
 import MobileLayoutFix from "@/components/MobileLayoutFix";
 
 export default function RootLayout({
@@ -52,7 +52,7 @@ export default function RootLayout({
             <div className="pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] min-h-screen">
               {children}
             </div>
-            <BottomNav />
+            <FloatingMenu />
           </AutoSyncProvider>
         </Providers>
         <Toaster />

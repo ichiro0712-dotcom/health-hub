@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 import ProfileForm from './ProfileForm';
 
 import Link from 'next/link';
-import { Merge, Dna, Smartphone, FileText } from 'lucide-react';
+import { Merge, Smartphone, FileText, LogOut } from 'lucide-react';
 
 import Header from '@/components/Header';
 
@@ -59,23 +59,6 @@ export default async function ProfilePage() {
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6" /></svg>
                         </Link>
 
-                        {/* DNA Data */}
-                        <Link href="/dna" className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center text-violet-600 dark:text-violet-400">
-                                    <Dna className="w-4 h-4" />
-                                </div>
-                                <div>
-                                    <div className="font-bold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                        DNAデータ
-                                        <span className="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400 rounded">開発予定</span>
-                                    </div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">遺伝子検査データの登録と分析</div>
-                                </div>
-                            </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6" /></svg>
-                        </Link>
-
                         {/* Smartphone Data Sync Settings */}
                         <Link href="/smartphone" className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                             <div className="flex items-center gap-3">
@@ -104,6 +87,19 @@ export default async function ProfilePage() {
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6" /></svg>
                         </Link>
                     </div>
+                </div>
+
+                {/* Logout Section */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+                    <Link href="/api/auth/signout" className="flex items-center justify-between p-4 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
+                                <LogOut className="w-4 h-4" />
+                            </div>
+                            <div className="font-bold text-sm text-red-600 dark:text-red-400">ログアウト</div>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400"><path d="m9 18 6-6-6-6" /></svg>
+                    </Link>
                 </div>
             </div>
         </div >
