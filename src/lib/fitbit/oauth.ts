@@ -96,28 +96,38 @@ export function buildAuthorizationUrl(
 
 /**
  * Exchange authorization code for tokens
+ *
+ * Fitbit PKCE flow: Use Body parameters instead of Basic Auth header
+ * to avoid conflict between Authorization header and body client_id
  */
 export async function exchangeCodeForTokens(
   code: string,
   codeVerifier: string,
   config: FitbitOAuthConfig
 ): Promise<FitbitTokenResponse> {
+  // Debug: Log credential lengths (not values) for troubleshooting
+  console.log('Token exchange - Credential check:', {
+    clientIdLength: config.clientId?.length,
+    clientSecretLength: config.clientSecret?.length,
+    redirectUri: config.redirectUri,
+    codeLength: code?.length,
+    codeVerifierLength: codeVerifier?.length,
+  });
+
+  // PKCE flow: Include client_id and client_secret in body, NOT in Authorization header
   const params = new URLSearchParams({
     client_id: config.clientId,
+    client_secret: config.clientSecret,
     grant_type: 'authorization_code',
     code,
     code_verifier: codeVerifier,
     redirect_uri: config.redirectUri,
   });
 
-  // Fitbit requires Basic Auth header with client credentials
-  const basicAuth = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
-
   const response = await fetch(FITBIT_TOKEN_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${basicAuth}`,
     },
     body: params.toString(),
   });
@@ -126,12 +136,6 @@ export async function exchangeCodeForTokens(
     const errorText = await response.text();
     console.error('Token exchange failed - Status:', response.status);
     console.error('Token exchange failed - Response:', errorText);
-    console.error('Token exchange failed - Request params:', {
-      client_id: config.clientId,
-      redirect_uri: config.redirectUri,
-      code_length: code?.length,
-      code_verifier_length: codeVerifier?.length,
-    });
 
     let errorData;
     try {
@@ -147,23 +151,24 @@ export async function exchangeCodeForTokens(
 
 /**
  * Refresh access token using refresh token
+ *
+ * Use Body parameters instead of Basic Auth header for consistency with PKCE flow
  */
 export async function refreshAccessToken(
   refreshToken: string,
   config: FitbitOAuthConfig
 ): Promise<FitbitTokenResponse> {
   const params = new URLSearchParams({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
   });
-
-  const basicAuth = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
 
   const response = await fetch(FITBIT_TOKEN_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${basicAuth}`,
     },
     body: params.toString(),
   });
@@ -179,22 +184,23 @@ export async function refreshAccessToken(
 
 /**
  * Revoke access token (disconnect)
+ *
+ * Use Body parameters instead of Basic Auth header
  */
 export async function revokeToken(
   token: string,
   config: FitbitOAuthConfig
 ): Promise<void> {
   const params = new URLSearchParams({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
     token,
   });
-
-  const basicAuth = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
 
   const response = await fetch(FITBIT_REVOKE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${basicAuth}`,
     },
     body: params.toString(),
   });
