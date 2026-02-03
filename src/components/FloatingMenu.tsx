@@ -94,7 +94,7 @@ export default function FloatingMenu() {
 
       {/* Slide-in Menu Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-[300px] max-w-[85vw] bg-white dark:bg-slate-900 z-[70] shadow-2xl transform transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-full w-[300px] max-w-[85vw] bg-white dark:bg-slate-900 z-[70] shadow-2xl transform transition-transform duration-300 ease-out flex flex-col ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
