@@ -27,7 +27,6 @@ export async function GET() {
       );
     }
 
-    // @ts-ignore - session.user.id is added in JWT callback
     const userId = session.user.id;
 
     // Get OAuth config

@@ -97,14 +97,7 @@ export async function POST(req: NextRequest) {
         // App RouterではgetTokenを使用してJWTトークンを取得
         const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-        console.log('🔍 Auth debug:', {
-            hasToken: !!token,
-            hasEmail: !!token?.email,
-            email: token?.email
-        });
-
         if (!token?.email) {
-            console.error('❌ No token or email found');
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -149,8 +142,8 @@ export async function POST(req: NextRequest) {
 
     } catch (error) {
         console.error('Analysis error:', error);
-        const message = error instanceof Error ? error.message : 'Internal server error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        // 詳細エラーは内部ログのみ、クライアントには汎化メッセージ
+        return NextResponse.json({ error: '分析に失敗しました' }, { status: 500 });
     }
 }
 

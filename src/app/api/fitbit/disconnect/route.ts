@@ -22,7 +22,6 @@ export async function DELETE() {
       );
     }
 
-    // @ts-ignore
     const userId = session.user.id;
 
     // Get current Fitbit account

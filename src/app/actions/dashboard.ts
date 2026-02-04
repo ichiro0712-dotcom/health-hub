@@ -53,32 +53,6 @@ export async function getDashboardData(): Promise<DashboardResponse> {
         const heartRateData = fitData.map((d: any) => d.heartRate || null);
         const weightData = fitData.map((d: any) => d.weight || null);
 
-        return {
-            success: true,
-            data: {
-                fit: {
-                    labels: fitLabels,
-                    datasets: [
-                        {
-                            label: 'Steps',
-                            data: stepsData,
-                            borderColor: 'rgb(53, 162, 235)',
-                            backgroundColor: 'rgba(53, 162, 235, 0.5)',
-                            yAxisID: 'y',
-                        },
-                        {
-                            label: 'Heart Rate',
-                            data: heartRateData,
-                            borderColor: 'rgb(255, 99, 132)',
-                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
-                            yAxisID: 'y1',
-                        }
-                    ]
-                },
-                records: healthRecords
-            }
-        };
-
         // 3. Process Health Records for Trends (e.g., Weight, BMI if available)
         // We fetch ALL verified records for the chart, not just the last 5
         const allRecords = await prisma.healthRecord.findMany({

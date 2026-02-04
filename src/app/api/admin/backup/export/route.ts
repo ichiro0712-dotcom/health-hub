@@ -20,18 +20,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 開発環境またはadminユーザーのみ許可
-    // TODO: 本番環境では適切な権限チェックを実装
-    if (process.env.NODE_ENV === 'production') {
-      // 本番環境では管理者のみ許可するロジックを追加
-      // 現時点では開発環境のみ許可
+    // 管理者のみ許可（環境変数で管理者メールを設定）
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
+    const userEmail = session.user.email?.toLowerCase();
+
+    // myDataOnlyの場合は一般ユーザーも許可、それ以外は管理者のみ
+    const searchParams = request.nextUrl.searchParams;
+    const myDataOnly = searchParams.get('myDataOnly') === 'true';
+    const isAdmin = userEmail && adminEmails.includes(userEmail);
+
+    if (!myDataOnly && !isAdmin) {
+      return NextResponse.json(
+        { success: false, error: '管理者権限が必要です' },
+        { status: 403 }
+      );
     }
 
     // リクエストパラメータを取得
-    const searchParams = request.nextUrl.searchParams;
     const tablesParam = searchParams.get('tables');
-    const userIdParam = searchParams.get('userId');
-    const myDataOnly = searchParams.get('myDataOnly') === 'true';
 
     // エクスポートオプションを構築
     const options: ExportOptions = {};
@@ -40,13 +46,8 @@ export async function POST(request: NextRequest) {
       options.tables = tablesParam.split(',').map(t => t.trim());
     }
 
-    // ユーザー単位エクスポート
-    if (myDataOnly) {
-      // @ts-ignore - session.user.idはJWTコールバックで追加
-      options.userId = session.user.id;
-    } else if (userIdParam) {
-      options.userId = userIdParam;
-    }
+    // ユーザー単位エクスポート（一般ユーザーは自分のデータのみ）
+    options.userId = session.user.id;
 
     // エクスポート実行
     const backup = await exportDatabase(options);
@@ -88,11 +89,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 管理者のみ許可
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
+    const userEmail = session.user.email?.toLowerCase();
     const searchParams = request.nextUrl.searchParams;
     const myDataOnly = searchParams.get('myDataOnly') === 'true';
+    const isAdmin = userEmail && adminEmails.includes(userEmail);
 
-    // @ts-ignore
-    const userId = myDataOnly ? session.user.id : undefined;
+    if (!myDataOnly && !isAdmin) {
+      return NextResponse.json(
+        { success: false, error: '管理者権限が必要です' },
+        { status: 403 }
+      );
+    }
+
+    const userId = session.user.id;
 
     // レコード数を取得
     const { getTableCounts } = await import('@/lib/backup');
@@ -101,7 +112,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       counts,
-      userId: userId || null,
+      userId,
     });
   } catch (error) {
     console.error('Preview error:', error);

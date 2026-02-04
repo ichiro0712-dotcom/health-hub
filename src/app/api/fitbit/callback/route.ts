@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // @ts-ignore
     const userId = session.user.id;
 
     // Get authorization code and state from query params
@@ -71,21 +70,12 @@ export async function GET(request: NextRequest) {
 
     // Exchange code for tokens
     const config = getOAuthConfig();
-    console.log('Fitbit OAuth callback - exchanging code for tokens');
-    console.log('Config:', {
-      clientId: config.clientId,
-      redirectUri: config.redirectUri,
-      hasClientSecret: !!config.clientSecret,
-      clientSecretLength: config.clientSecret?.length,
-    });
-    console.log('Code verifier length:', fitbitAccount.codeVerifier?.length);
 
     const tokens = await exchangeCodeForTokens(
       code,
       fitbitAccount.codeVerifier,
       config
     );
-    console.log('Token exchange successful, user_id:', tokens.user_id);
 
     // Update FitbitAccount with real tokens
     await prisma.fitbitAccount.update({
@@ -112,9 +102,7 @@ export async function GET(request: NextRequest) {
     try {
       const session = await getServerSession(authOptions);
       if (session?.user) {
-        // @ts-ignore
         await prisma.fitbitAccount.delete({
-          // @ts-ignore
           where: { userId: session.user.id },
         }).catch(() => {
           // Ignore if already deleted

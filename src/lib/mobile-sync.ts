@@ -98,7 +98,6 @@ export async function checkAndSyncHealthConnect() {
             const stepsData = await fetchRecords('Steps');
             console.log(`[${date.toDateString()}] Steps: ${stepsData.length}`);
 
-            // @ts-ignore
             const distanceData = await fetchRecords('Distance');
 
             const caloriesData = await fetchRecords('ActiveCaloriesBurned');
@@ -107,7 +106,6 @@ export async function checkAndSyncHealthConnect() {
 
             const weightData = await fetchRecords('Weight');
 
-            // @ts-ignore
             const sleepData = await fetchRecords('SleepSession');
             console.log(`[${date.toDateString()}] Sleep: ${sleepData.length}`);
 

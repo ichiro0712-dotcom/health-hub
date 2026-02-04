@@ -4,6 +4,86 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
+// スマホデータを取得するヘルパー関数
+async function getSmartphoneDataForSync(userId: string): Promise<Array<{ date: Date; items: { [key: string]: number } }>> {
+    // FitData, HRV, DetailedSleep, IntradayHeartRateを取得
+    const [fitDataRecords, hrvRecords, sleepRecords, intradayHrRecords] = await Promise.all([
+        prisma.fitData.findMany({
+            where: { userId },
+            orderBy: { date: 'asc' }
+        }),
+        prisma.hrvData.findMany({
+            where: { userId },
+            orderBy: { date: 'asc' }
+        }),
+        prisma.detailedSleep.findMany({
+            where: { userId },
+            orderBy: { date: 'asc' }
+        }),
+        prisma.intradayHeartRate.findMany({
+            where: { userId },
+            orderBy: { date: 'asc' }
+        })
+    ]);
+
+    // 日付ごとにデータをマージ
+    const dataByDate: { [dateStr: string]: { date: Date; items: { [key: string]: number } } } = {};
+
+    const addItem = (date: Date, key: string, value: number | null | undefined) => {
+        if (value === null || value === undefined) return;
+        const dateStr = date.toISOString().split('T')[0];
+        if (!dataByDate[dateStr]) {
+            dataByDate[dateStr] = { date, items: {} };
+        }
+        dataByDate[dateStr].items[key] = value;
+    };
+
+    // FitData
+    for (const fit of fitDataRecords) {
+        if (fit.weight) addItem(fit.date, '体重', fit.weight);
+        if (fit.steps) addItem(fit.date, '歩数', fit.steps);
+        if (fit.heartRate) addItem(fit.date, '安静時心拍数', fit.heartRate);
+        if (fit.distance) addItem(fit.date, '移動距離', fit.distance);
+        if (fit.calories) addItem(fit.date, '消費カロリー', fit.calories);
+        if (fit.sleepMinutes) addItem(fit.date, '睡眠時間(分)', fit.sleepMinutes);
+        if (fit.respiratoryRate) addItem(fit.date, '呼吸数', fit.respiratoryRate);
+        if (fit.skinTemperature) addItem(fit.date, '皮膚温度変化', fit.skinTemperature);
+
+        if (fit.vitals) {
+            const v = fit.vitals as any;
+            if (v.bloodPressureSystolic) addItem(fit.date, '血圧(上)', v.bloodPressureSystolic);
+            if (v.bloodPressureDiastolic) addItem(fit.date, '血圧(下)', v.bloodPressureDiastolic);
+            if (v.bodyTemperature) addItem(fit.date, '体温', v.bodyTemperature);
+            if (v.oxygenSaturation) addItem(fit.date, '酸素飽和度', v.oxygenSaturation);
+        }
+    }
+
+    // HRV Data
+    for (const hrv of hrvRecords) {
+        addItem(hrv.date, 'HRV(RMSSD)', hrv.dailyRmssd);
+        if (hrv.deepRmssd) addItem(hrv.date, 'HRV(深睡眠)', hrv.deepRmssd);
+    }
+
+    // Detailed Sleep
+    for (const sleep of sleepRecords) {
+        addItem(sleep.date, '睡眠効率(%)', sleep.efficiency);
+        addItem(sleep.date, '覚醒時間(分)', sleep.minutesAwake);
+        addItem(sleep.date, '浅い睡眠(分)', sleep.minutesLight);
+        addItem(sleep.date, '深い睡眠(分)', sleep.minutesDeep);
+        addItem(sleep.date, 'REM睡眠(分)', sleep.minutesRem);
+    }
+
+    // Intraday Heart Rate
+    for (const ihr of intradayHrRecords) {
+        if (ihr.restingHeartRate) addItem(ihr.date, '安静時心拍数', ihr.restingHeartRate);
+        addItem(ihr.date, '脂肪燃焼(分)', ihr.fatBurnMinutes);
+        addItem(ihr.date, '有酸素運動(分)', ihr.cardioMinutes);
+        addItem(ihr.date, 'ピーク運動(分)', ihr.peakMinutes);
+    }
+
+    return Object.values(dataByDate);
+}
+
 // デフォルトのドキュメントID
 const DEFAULT_RECORDS_DOC_ID = '1qCYtdo40Adk_-cG8vcwPkwlPW6NKHq97zeIX-EB0F3Y';
 const DEFAULT_PROFILE_DOC_ID = '1sHZtZpcFE3Gv8IT8AZZftk3xnCCOUcVwfkC9NuzRanA';
@@ -158,6 +238,9 @@ export async function triggerGoogleDocsSync(): Promise<{ success: boolean; error
             }
         });
 
+        // スマホデータを取得
+        const smartphoneData = await getSmartphoneDataForSync(user.id);
+
         const profileResult = await syncHealthProfileToGoogleDocs(
             sections.map(s => ({
                 categoryId: s.categoryId,
@@ -175,7 +258,8 @@ export async function triggerGoogleDocsSync(): Promise<{ success: boolean; error
                     date: r.date,
                     value: r.value
                 }))
-            }))
+            })),
+            smartphoneData
         );
 
         if (!recordsResult.success || !profileResult.success) {

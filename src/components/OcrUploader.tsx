@@ -173,8 +173,8 @@ function VerificationUI({ result, images, onReset, initialAge, onSaveOverride, i
             const payload = { ...data, images };
             res = await onSaveOverride(payload);
         } else {
-            // @ts-ignore - explicitly passing images (Default behavior)
-            res = await saveHealthRecord({ ...data, images });
+            // Default behavior - pass data with images
+            res = await saveHealthRecord({ ...data, images } as Parameters<typeof saveHealthRecord>[0]);
         }
 
         if (res.success) {
@@ -187,8 +187,18 @@ function VerificationUI({ result, images, onReset, initialAge, onSaveOverride, i
 
     const handleChange = (idx: number, field: keyof OcrItem, val: string) => {
         const newData = { ...data };
-        // @ts-ignore
-        newData.results[idx][field] = val;
+        const item = newData.results[idx];
+        if (field === 'value') {
+            item.value = val;
+        } else if (field === 'item') {
+            item.item = val;
+        } else if (field === 'unit') {
+            item.unit = val;
+        } else if (field === 'evaluation') {
+            item.evaluation = val;
+        } else if (field === 'category') {
+            item.category = val;
+        }
         setData(newData);
     }
 
@@ -324,7 +334,6 @@ function VerificationUI({ result, images, onReset, initialAge, onSaveOverride, i
                                         <input
                                             type="text"
                                             value={item.evaluation || ''}
-                                            // @ts-ignore
                                             onChange={(e) => handleChange(idx, 'evaluation', e.target.value)}
                                             className="w-12 bg-transparent border-b border-transparent focus:bg-white dark:focus:bg-slate-900 focus:border-[#00CED1] hover:border-gray-300 dark:hover:border-slate-600 outline-none transition-all px-1 font-medium text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder:text-slate-500 text-center"
                                             placeholder="判定"
@@ -375,7 +384,6 @@ function VerificationUI({ result, images, onReset, initialAge, onSaveOverride, i
                     <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-2">補足事項・所見</span>
                     <textarea
                         value={data.meta?.notes || ""}
-                        // @ts-ignore
                         onChange={(e) => setData({ ...data, meta: { ...data.meta, notes: e.target.value } })}
                         placeholder="医師からのコメントや特記事項があれば入力してください"
                         className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:border-[#00CED1] outline-none shadow-sm min-h-[80px] placeholder:text-gray-400 dark:placeholder:text-slate-500"

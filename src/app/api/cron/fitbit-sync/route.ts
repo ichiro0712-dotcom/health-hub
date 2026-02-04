@@ -28,8 +28,9 @@ const MAX_USERS_PER_RUN = 20;
 
 export async function GET(request: NextRequest) {
     // Verify cron secret (Vercel sends this automatically)
+    // CRON_SECRET未設定時も拒否（セキュリティ強化）
     const authHeader = request.headers.get('authorization');
-    if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+    if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -58,9 +59,11 @@ export async function GET(request: NextRequest) {
 
         console.log(`[Cron] Found ${inactiveUsers.length} inactive users to sync`);
 
-        const results: { userId: string; success: boolean; error?: string }[] = [];
+        // レスポンス用（userIdをマスク）
+        const results: { userIndex: number; success: boolean; error?: string }[] = [];
 
-        for (const account of inactiveUsers) {
+        for (let i = 0; i < inactiveUsers.length; i++) {
+            const account = inactiveUsers[i];
             try {
                 const endDate = new Date();
                 const startDate = account.lastSyncedAt
@@ -70,7 +73,8 @@ export async function GET(request: NextRequest) {
                 // Add 1 day buffer
                 startDate.setDate(startDate.getDate() - 1);
 
-                console.log(`[Cron] Syncing user ${account.userId}: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+                // ログにはユーザーIDを含めない（プライバシー保護）
+                console.log(`[Cron] Syncing user #${i + 1}: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
                 const syncResult = await syncFitbitData(account.userId, {
                     startDate,
@@ -84,7 +88,7 @@ export async function GET(request: NextRequest) {
                 });
 
                 results.push({
-                    userId: account.userId,
+                    userIndex: i + 1,
                     success: syncResult.success,
                     error: syncResult.errors.length > 0
                         ? syncResult.errors.map(e => e.message).join(', ')
@@ -95,9 +99,9 @@ export async function GET(request: NextRequest) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
             } catch (error) {
-                console.error(`[Cron] Failed to sync user ${account.userId}:`, error);
+                console.error(`[Cron] Failed to sync user #${i + 1}:`, error);
                 results.push({
-                    userId: account.userId,
+                    userIndex: i + 1,
                     success: false,
                     error: error instanceof Error ? error.message : 'Unknown error',
                 });
@@ -119,8 +123,9 @@ export async function GET(request: NextRequest) {
 
     } catch (error) {
         console.error('[Cron] Error:', error);
+        // 詳細エラーは内部ログのみ、クライアントには汎化メッセージ
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Cron failed' },
+            { error: 'Cron job failed' },
             { status: 500 }
         );
     }

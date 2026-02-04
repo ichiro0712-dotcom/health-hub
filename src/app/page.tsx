@@ -2,10 +2,11 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import LoginButton from "@/components/LoginButton";
 import Header from "@/components/Header";
-import { Activity, Heart, Moon, Footprints, TrendingUp, Sparkles, BarChart2, MessageSquare, Video, BookOpen, Building2, Pill, Plane, Award } from "lucide-react";
+import { Activity, Moon, Footprints, TrendingUp, Sparkles, BarChart2, MessageSquare, Video, BookOpen, Building2, Pill, Plane, Award } from "lucide-react";
 import { NewsSection } from "@/components/home/NewsSection";
 import { VideoSection } from "@/components/home/VideoSection";
 import Link from "next/link";
+import Image from "next/image";
 
 export default async function Home() {
     const session = await getServerSession(authOptions);
@@ -103,11 +104,14 @@ function UnauthenticatedHome() {
     return (
         <div className="flex flex-col items-center justify-center min-h-[70vh] text-center space-y-8 py-12">
             {/* Logo */}
-            <div className="relative">
-                <img
+            <div className="relative w-24 h-24">
+                <Image
                     src="/favicon.png"
                     alt="Health Hub"
-                    className="w-24 h-24 rounded-3xl shadow-xl"
+                    width={96}
+                    height={96}
+                    className="rounded-3xl shadow-xl"
+                    priority
                 />
             </div>
 

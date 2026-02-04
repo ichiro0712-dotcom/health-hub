@@ -66,7 +66,13 @@ async function exportTable(table: TableName, userId?: string): Promise<unknown[]
 
     case 'Account':
       const accounts = await prisma.account.findMany({ where: whereClause });
-      return accounts;
+      // セキュリティ: OAuthトークンをマスク
+      return accounts.map(a => ({
+        ...a,
+        access_token: a.access_token ? '[REDACTED]' : null,
+        refresh_token: a.refresh_token ? '[REDACTED]' : null,
+        id_token: a.id_token ? '[REDACTED]' : null,
+      }));
 
     case 'Session':
       const sessions = await prisma.session.findMany({ where: whereClause });
@@ -158,6 +164,46 @@ async function exportTable(table: TableName, userId?: string): Promise<unknown[]
       return allHistories.map(h => ({
         ...h,
         createdAt: h.createdAt.toISOString(),
+      }));
+
+    case 'FitbitAccount':
+      const fitbitAccounts = await prisma.fitbitAccount.findMany({ where: whereClause });
+      // セキュリティ: OAuthトークンをマスク
+      return fitbitAccounts.map(f => ({
+        ...f,
+        accessToken: '[REDACTED]',
+        refreshToken: '[REDACTED]',
+        codeVerifier: f.codeVerifier ? '[REDACTED]' : null,
+        expiresAt: f.expiresAt.toISOString(),
+        createdAt: f.createdAt.toISOString(),
+        updatedAt: f.updatedAt.toISOString(),
+        lastSyncedAt: f.lastSyncedAt?.toISOString() || null,
+      }));
+
+    case 'HrvData':
+      const hrvData = await prisma.hrvData.findMany({ where: whereClause });
+      return hrvData.map(h => ({
+        ...h,
+        date: h.date.toISOString(),
+        syncedAt: h.syncedAt.toISOString(),
+      }));
+
+    case 'DetailedSleep':
+      const sleepData = await prisma.detailedSleep.findMany({ where: whereClause });
+      return sleepData.map(s => ({
+        ...s,
+        date: s.date.toISOString(),
+        startTime: s.startTime.toISOString(),
+        endTime: s.endTime.toISOString(),
+        syncedAt: s.syncedAt.toISOString(),
+      }));
+
+    case 'IntradayHeartRate':
+      const hrData = await prisma.intradayHeartRate.findMany({ where: whereClause });
+      return hrData.map(h => ({
+        ...h,
+        date: h.date.toISOString(),
+        syncedAt: h.syncedAt.toISOString(),
       }));
 
     default:

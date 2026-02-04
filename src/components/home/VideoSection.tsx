@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { Play, Search, Filter, ChevronDown, Video, Loader2, Eye } from 'lucide-react';
 import { VideoItem, VIDEO_CATEGORIES } from '@/types/video';
 import { getVideos } from '@/lib/mock-data';
@@ -187,10 +188,12 @@ function VideoCard({ video }: { video: VideoItem }) {
     <div className="group cursor-pointer">
       {/* Thumbnail */}
       <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-700">
-        <img
+        <Image
           src={video.thumbnailUrl}
           alt={video.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          className="object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
         {/* Play Button Overlay */}

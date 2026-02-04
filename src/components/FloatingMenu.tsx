@@ -123,7 +123,7 @@ export default function FloatingMenu() {
           <div className="mt-4 flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
             <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
               {session.user?.image ? (
-                <img src={session.user.image} alt="User" className="w-full h-full object-cover" />
+                <Image src={session.user.image} alt="User" width={40} height={40} className="w-full h-full object-cover" />
               ) : (
                 <User className="w-5 h-5 text-slate-400" />
               )}

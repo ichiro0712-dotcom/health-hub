@@ -266,7 +266,13 @@ interface HabitData {
     }>;
 }
 
-// 期間の定義
+// スマホデータの型定義（日別データ）
+interface SmartphoneDataRecord {
+    date: Date;
+    items: { [key: string]: number };
+}
+
+// 期間の定義（習慣用）
 type PeriodKey = 'week' | 'threeMonths' | 'halfYear' | 'year' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null; weeksLabel: string }[] = [
     { key: 'week', label: '過去1週間', days: 7, weeksLabel: '1週間' },
@@ -274,6 +280,16 @@ const PERIODS: { key: PeriodKey; label: string; days: number | null; weeksLabel:
     { key: 'halfYear', label: '過去半年', days: 182, weeksLabel: '約26週' },
     { key: 'year', label: '過去1年', days: 365, weeksLabel: '52週' },
     { key: 'all', label: '全期間', days: null, weeksLabel: '全期間' },
+];
+
+// スマホデータ用の期間定義
+type SmartphonePeriodKey = 'week' | 'month' | 'threeMonths' | 'halfYear' | 'year';
+const SMARTPHONE_PERIODS: { key: SmartphonePeriodKey; label: string; days: number }[] = [
+    { key: 'week', label: '過去1週間', days: 7 },
+    { key: 'month', label: '過去1ヶ月', days: 30 },
+    { key: 'threeMonths', label: '過去3ヶ月', days: 90 },
+    { key: 'halfYear', label: '過去半年', days: 182 },
+    { key: 'year', label: '過去1年', days: 365 },
 ];
 
 // 週平均を計算する関数
@@ -354,6 +370,86 @@ function formatHabitsWeeklyAverage(habits: HabitData[]): string {
     return lines.join('\n').trim();
 }
 
+// スマホデータの期間別平均を計算
+function calculateSmartphoneAverages(
+    records: SmartphoneDataRecord[],
+    days: number
+): { itemName: string; avg: number; count: number }[] {
+    const now = new Date();
+    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+    // 期間内のレコードをフィルタリング
+    const filteredRecords = records.filter(r => {
+        const recordDate = new Date(r.date);
+        return recordDate >= startDate && recordDate <= now;
+    });
+
+    if (filteredRecords.length === 0) {
+        return [];
+    }
+
+    // 各項目の値を収集（データがある日のみ）
+    const itemValues: { [key: string]: number[] } = {};
+
+    filteredRecords.forEach(record => {
+        Object.entries(record.items).forEach(([itemName, value]) => {
+            if (value !== null && value !== undefined && !isNaN(value)) {
+                if (!itemValues[itemName]) {
+                    itemValues[itemName] = [];
+                }
+                itemValues[itemName].push(value);
+            }
+        });
+    });
+
+    // 平均を計算
+    const results: { itemName: string; avg: number; count: number }[] = [];
+    Object.entries(itemValues).forEach(([itemName, values]) => {
+        if (values.length > 0) {
+            const sum = values.reduce((a, b) => a + b, 0);
+            const avg = sum / values.length;
+            results.push({
+                itemName,
+                avg: Math.round(avg * 100) / 100, // 小数点2桁
+                count: values.length
+            });
+        }
+    });
+
+    // 項目名でソート
+    return results.sort((a, b) => a.itemName.localeCompare(b.itemName, 'ja'));
+}
+
+// スマホデータをテキスト形式にフォーマット
+function formatSmartphoneData(records: SmartphoneDataRecord[]): string {
+    if (records.length === 0) {
+        return '';
+    }
+
+    const now = new Date();
+    const lines: string[] = [];
+    lines.push('【スマホ データ平均サマリー】');
+    lines.push(`出力日時: ${formatDateTime(now)}`);
+    lines.push('');
+
+    SMARTPHONE_PERIODS.forEach((period) => {
+        const averages = calculateSmartphoneAverages(records, period.days);
+
+        if (averages.length > 0) {
+            lines.push(`＜${period.label}＞`);
+            averages.forEach((item) => {
+                const avgFormatted = Number.isInteger(item.avg)
+                    ? item.avg.toString()
+                    : item.avg.toFixed(1);
+                lines.push(`${item.itemName}: ${avgFormatted} (${item.count}日分)`);
+            });
+            lines.push('');
+        }
+    });
+
+    return lines.join('\n').trim();
+}
+
 // Sync health profile to Google Docs
 export async function syncHealthProfileToGoogleDocs(
     sections: Array<{
@@ -363,7 +459,8 @@ export async function syncHealthProfileToGoogleDocs(
         orderIndex: number;
     }>,
     headerText?: string,
-    habits?: HabitData[]
+    habits?: HabitData[],
+    smartphoneData?: SmartphoneDataRecord[]
 ) {
     try {
         const docs = getDocsClient();
@@ -379,7 +476,7 @@ export async function syncHealthProfileToGoogleDocs(
             lines.push('');
         }
 
-        lines.push('【健康プロフィール/習慣】');
+        lines.push('【健康プロフィール/習慣/スマホ】');
         lines.push(`最終更新: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`);
         lines.push('');
         lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -405,6 +502,14 @@ export async function syncHealthProfileToGoogleDocs(
             lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             lines.push('');
             lines.push(formatHabitsWeeklyAverage(habits));
+        }
+
+        // スマホデータを追加
+        if (smartphoneData && smartphoneData.length > 0) {
+            lines.push('');
+            lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            lines.push('');
+            lines.push(formatSmartphoneData(smartphoneData));
         }
 
         const content = lines.join('\n');

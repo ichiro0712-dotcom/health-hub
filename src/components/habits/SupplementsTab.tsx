@@ -208,20 +208,17 @@ export default function SupplementsTab({ supplements, setSupplements }: Props) {
         if (editingItem) {
             const res = await updateSupplement(editingItem.id, data);
             if (res.success && res.data) {
-                // @ts-ignore
-                setSupplements(prev => prev.map(s => s.id === editingItem.id ? { ...res.data, order: s.order } : s));
+                const updatedData = res.data as Supplement;
+                setSupplements(prev => prev.map(s => s.id === editingItem.id ? { ...updatedData, order: s.order } : s));
                 toast.success('更新しました');
             }
         } else {
-            console.log('[handleSave] Calling addSupplement with:', data);
             const res = await addSupplement(data);
-            console.log('[handleSave] Response:', res);
             if (res.success && res.data) {
-                // @ts-ignore
-                setSupplements(prev => [...prev, res.data]);
+                const newData = res.data as Supplement;
+                setSupplements(prev => [...prev, newData]);
                 toast.success('追加しました');
             } else {
-                console.error('[handleSave] Failed:', res.error);
                 toast.error('追加に失敗しました');
             }
         }
@@ -301,7 +298,7 @@ export default function SupplementsTab({ supplements, setSupplements }: Props) {
                             <h3 className="font-bold text-slate-800 dark:text-white">
                                 {editingItem ? 'サプリメントを編集' : '新しいサプリを追加'}
                             </h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">×</button>
+                            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600" aria-label="閉じる">×</button>
                         </div>
                         <form onSubmit={handleSave} className="p-6 space-y-4">
                             <div>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
@@ -16,10 +16,17 @@ const geistMono = Geist_Mono({
 import Providers from "@/components/Providers";
 import AutoSyncProvider from "@/components/AutoSyncProvider";
 
+// Next.js 14+: viewportとthemeColorは別途exportする
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f172a",
+};
+
 export const metadata: Metadata = {
   title: "Health Hub",
   description: "あなたの健康を見える化",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.png",
@@ -30,7 +37,6 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Health Hub",
   },
-  themeColor: "#0f172a",
 };
 
 import FloatingMenu from "@/components/FloatingMenu";
@@ -42,14 +48,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="ja" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
           <AutoSyncProvider>
             <MobileLayoutFix />
-            <div className="pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] min-h-screen">
+            {/* スキップリンク（アクセシビリティ: M-6） */}
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-teal-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg"
+            >
+              メインコンテンツへスキップ
+            </a>
+            <div id="main-content" className="pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] min-h-screen">
               {children}
             </div>
             <FloatingMenu />

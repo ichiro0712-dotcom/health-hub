@@ -10,6 +10,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { syncFitbitData, isFitbitConnected } from '@/lib/fitbit';
 import { FitbitDataType } from '@/lib/fitbit/types';
+import { triggerGoogleDocsSync } from '@/app/actions/google-docs-settings';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +23,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // @ts-ignore
     const userId = session.user.id;
 
     // Check if Fitbit is connected
@@ -53,6 +53,13 @@ export async function POST(request: NextRequest) {
       endDate,
       dataTypes,
     });
+
+    // Fitbit同期成功後、Google Docsも同期（バックグラウンドで実行）
+    if (result.success) {
+      triggerGoogleDocsSync().catch(err => {
+        console.error('Google Docs sync after Fitbit failed:', err);
+      });
+    }
 
     return NextResponse.json({
       success: result.success,

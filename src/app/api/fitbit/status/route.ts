@@ -21,7 +21,6 @@ export async function GET() {
       );
     }
 
-    // @ts-ignore
     const userId = session.user.id;
 
     // Get Fitbit status

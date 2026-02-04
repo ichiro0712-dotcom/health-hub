@@ -32,41 +32,37 @@ export async function getTrendsData(): Promise<TrendsResponse> {
         const user = await prisma.user.findUnique({ where: { id: session.user.id } });
         if (!user) return { success: false, availableKeys: [], records: [], error: "User not found" };
 
-        // Fetch Hospital Records
-        const hospitalRecords = await prisma.healthRecord.findMany({
-            where: {
-                userId: user.id,
-                status: 'verified'
-            },
-            orderBy: { date: 'asc' }
-        });
-
-        // Fetch Smartphone FitData
-        const fitDataRecords = await prisma.fitData.findMany({
-            where: { userId: user.id },
-            orderBy: { date: 'asc' }
-        });
-
-        // Fetch HRV Data
-        const hrvRecords = await prisma.hrvData.findMany({
-            where: { userId: user.id },
-            orderBy: { date: 'asc' }
-        });
-
-        // Fetch Detailed Sleep Data
-        const sleepRecords = await prisma.detailedSleep.findMany({
-            where: { userId: user.id },
-            orderBy: { date: 'asc' }
-        });
-
-        // Fetch Intraday Heart Rate Data
-        const intradayHrRecords = await prisma.intradayHeartRate.findMany({
-            where: { userId: user.id },
-            orderBy: { date: 'asc' }
-        });
-
-        // 0. Fetch Mappings
-        const mapping = await getItemMappings();
+        // 全クエリを並列実行（パフォーマンス改善: H-20）
+        const [
+            hospitalRecords,
+            fitDataRecords,
+            hrvRecords,
+            sleepRecords,
+            intradayHrRecords,
+            mapping
+        ] = await Promise.all([
+            prisma.healthRecord.findMany({
+                where: { userId: user.id, status: 'verified' },
+                orderBy: { date: 'asc' }
+            }),
+            prisma.fitData.findMany({
+                where: { userId: user.id },
+                orderBy: { date: 'asc' }
+            }),
+            prisma.hrvData.findMany({
+                where: { userId: user.id },
+                orderBy: { date: 'asc' }
+            }),
+            prisma.detailedSleep.findMany({
+                where: { userId: user.id },
+                orderBy: { date: 'asc' }
+            }),
+            prisma.intradayHeartRate.findMany({
+                where: { userId: user.id },
+                orderBy: { date: 'asc' }
+            }),
+            getItemMappings()
+        ]);
 
         // 1. Unified Dataset Construction
         const keySet = new Set<string>();
@@ -74,12 +70,10 @@ export async function getTrendsData(): Promise<TrendsResponse> {
 
         // Process Hospital Records
         for (const record of hospitalRecords) {
-            // @ts-ignore
-            const results = record.data?.results || [];
-            // @ts-ignore
-            const meta = record.data?.meta || {};
-            // @ts-ignore
-            const additional = record.additional_data || {};
+            const data = record.data as { results?: Array<{ item?: string; value?: string }>; meta?: { notes?: string; hospitalName?: string } } | null;
+            const results = data?.results || [];
+            const meta = data?.meta || {};
+            const additional = record.additional_data as { notes?: string; hospitalName?: string } | null;
 
             const itemsMap: { [key: string]: number } = {};
 
@@ -100,8 +94,8 @@ export async function getTrendsData(): Promise<TrendsResponse> {
                 date: record.date.toISOString().split('T')[0],
                 items: itemsMap,
                 images: record.images,
-                notes: meta.notes || (additional as any)?.notes || undefined,
-                hospital: meta.hospitalName || (additional as any)?.hospitalName || undefined,
+                notes: meta.notes || additional?.notes || undefined,
+                hospital: meta.hospitalName || additional?.hospitalName || undefined,
                 source: 'hospital' // Tag as Hospital Data
             });
         }
