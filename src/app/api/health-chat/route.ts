@@ -447,31 +447,40 @@ export async function POST(req: NextRequest) {
     // 抽出データをパース
     const { cleanResponse, extractedData } = parseExtractedData(aiResponse);
 
-    // セッション状態を更新（先に次の質問を計算）
-    const updatedAnsweredIds = extractedData
-      ? [...answeredIds, extractedData.questionId]
-      : answeredIds;
-    const newNextQuestion = getNextQuestion(updatedAnsweredIds, currentPriority);
-
-    // AIの応答に次の質問が含まれていない場合のみ追加する
-    // 重複防止: AIが既に質問を含めている場合はシステムからは追加しない
+    // データ抽出に失敗した場合の処理
+    // AIが情報を適切に抽出できなかった場合は、同じ質問をもう一度聞き直す
     let finalResponse = cleanResponse;
+    let questionToAsk = nextQuestion; // デフォルトは現在の質問（抽出失敗時は同じ質問を継続）
 
-    // AIの応答に既に質問が含まれているかをより厳密にチェック
-    const hasQuestionInResponse = cleanResponse.includes('？') ||
-                                   cleanResponse.includes('それでは次の質問') ||
-                                   cleanResponse.includes('次の質問です');
+    if (!extractedData && nextQuestion) {
+      // 抽出失敗: AIの応答に質問が含まれていない場合、聞き直しメッセージを追加
+      const hasQuestionInResponse = cleanResponse.includes('？') ||
+                                     cleanResponse.includes('それでは') ||
+                                     cleanResponse.includes('教えて');
 
-    // AIの応答に現在の質問のキーワードが含まれているかチェック（同じ質問の重複防止）
-    const currentQuestionKeywords = nextQuestion?.question.slice(0, 20) || '';
-    const hasCurrentQuestionInResponse = currentQuestionKeywords && cleanResponse.includes(currentQuestionKeywords);
+      if (!hasQuestionInResponse) {
+        // AIが質問を含めていない場合、明示的に聞き直す
+        finalResponse = `${cleanResponse}\n\nすみません、もう少し具体的に教えていただけますか？\n\n${nextQuestion.question}`;
+      }
+      // 抽出失敗時は進捗を更新しないので、同じ質問が継続される
+    } else if (extractedData) {
+      // 抽出成功: 次の質問へ進む
+      const updatedAnsweredIds = [...answeredIds, extractedData.questionId];
+      const newNextQuestion = getNextQuestion(updatedAnsweredIds, currentPriority);
+      questionToAsk = newNextQuestion;
 
-    // 次の質問のキーワードが含まれているかチェック
-    const nextQuestionKeywords = newNextQuestion?.question.slice(0, 20) || '';
-    const hasNextQuestionInResponse = nextQuestionKeywords && cleanResponse.includes(nextQuestionKeywords);
+      // AIの応答に次の質問が含まれていない場合のみ追加する
+      const hasQuestionInResponse = cleanResponse.includes('？') ||
+                                     cleanResponse.includes('それでは次の質問') ||
+                                     cleanResponse.includes('次の質問です');
 
-    if (newNextQuestion && !hasQuestionInResponse && !hasCurrentQuestionInResponse && !hasNextQuestionInResponse) {
-      finalResponse = `${cleanResponse}\n\nそれでは次の質問です。\n\n${newNextQuestion.question}`;
+      // 次の質問のキーワードが含まれているかチェック
+      const nextQuestionKeywords = newNextQuestion?.question.slice(0, 20) || '';
+      const hasNextQuestionInResponse = nextQuestionKeywords && cleanResponse.includes(nextQuestionKeywords);
+
+      if (newNextQuestion && !hasQuestionInResponse && !hasNextQuestionInResponse) {
+        finalResponse = `${cleanResponse}\n\nそれでは次の質問です。\n\n${newNextQuestion.question}`;
+      }
     }
 
     // DB処理を並列実行（パフォーマンス最適化）
@@ -490,15 +499,15 @@ export async function POST(req: NextRequest) {
           sessionId: session.id,
           role: 'assistant',
           content: finalResponse,
-          questionId: newNextQuestion?.id
+          questionId: questionToAsk?.id
         }
       }),
       // セッション状態を更新
       prisma.healthChatSession.update({
         where: { id: session.id },
         data: {
-          currentQuestionId: newNextQuestion?.id || null,
-          currentSectionId: newNextQuestion?.sectionId || null
+          currentQuestionId: questionToAsk?.id || null,
+          currentSectionId: questionToAsk?.sectionId || null
         }
       })
     ];
