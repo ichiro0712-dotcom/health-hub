@@ -487,6 +487,308 @@ EXTRACTED_DATA-->
 - [x] エラーハンドリング（デバッグログ追加）
 - [ ] テスト・デバッグ
 
+### Phase 5: 外部データ取り込み
+- [ ] 外部データソースからの自動取り込み機能
+- [ ] 新規データ検知・通知機能
+- [ ] 手動コマンド対応
+
+---
+
+## 外部データ取り込み機能
+
+### 概要
+
+健康診断結果やFitbit等のデバイスデータから、健康プロフィールに反映できる情報を自動的に抽出・取り込む機能。
+
+### データソース
+
+| ソース | モデル | 取得できる情報 |
+|--------|--------|----------------|
+| **HealthRecord** | 健康診断データ | 血圧、体重、血液検査値、所見、医師コメント |
+| **FitData** | 日次フィットネスデータ | 心拍数、歩数、睡眠時間、体重 |
+| **DetailedSleep** | 詳細睡眠データ | 睡眠時間、睡眠効率、睡眠ステージ |
+| **HrvData** | 心拍変動データ | HRV (RMSSD) |
+| **Supplement** | サプリメント | 服用中サプリ一覧 |
+| **LifestyleHabit** | 生活習慣 | 飲酒、喫煙などの習慣データ |
+
+### データソース→質問マッピング
+
+```typescript
+// src/constants/external-data-mapping.ts
+
+export const EXTERNAL_DATA_MAPPING = {
+  // HealthRecord (健康診断) からのマッピング
+  healthRecord: {
+    // 数値データ
+    'bloodPressureHigh': { questionId: '1-8', field: '収縮期血圧' },
+    'bloodPressureLow': { questionId: '1-8', field: '拡張期血圧' },
+    'weight': { questionId: '1-2', field: '体重' },
+    'height': { questionId: '1-2', field: '身長' },
+    'bmi': { questionId: '1-2', field: 'BMI' },
+    'bodyFatPercentage': { questionId: '1-3', field: '体脂肪率' },
+    'bloodSugar': { questionId: '3-3', field: '血糖値' },
+    'hba1c': { questionId: '3-3', field: 'HbA1c' },
+    // テキストデータ（所見・コメント）
+    'findings': { questionId: null, type: 'text', target: 'medical_history' },
+    'notes': { questionId: null, type: 'text', target: 'medical_history' },
+    'sections': { questionId: null, type: 'sections' },
+  },
+
+  // FitData からのマッピング
+  fitData: {
+    'heartRate': { questionId: '1-8', field: '脈拍数' },
+    'steps': { questionId: '8-5', field: '歩数' },
+    'sleepMinutes': { questionId: '5-1', field: '睡眠時間' },
+    'weight': { questionId: '1-2', field: '体重' },
+  },
+
+  // DetailedSleep からのマッピング
+  detailedSleep: {
+    'duration': { questionId: '5-1', field: '睡眠時間' },
+    'efficiency': { questionId: '5-3', field: '睡眠効率' },
+  },
+
+  // Supplement からのマッピング
+  supplement: {
+    'list': { questionId: '7-2', field: 'サプリメント一覧' },
+  },
+
+  // LifestyleHabit からのマッピング
+  lifestyleHabit: {
+    'Alcohol': { questionId: '7-3', field: '飲酒' },
+    'Tobacco': { questionId: '7-4', field: '喫煙' },
+  },
+};
+```
+
+### 機能フロー
+
+#### 1. セッション開始時の新規データ検知
+
+```
+チャット開始（POST /api/health-chat/session）
+  │
+  ├─ 1. 既存の取り込み履歴を確認（lastImportedAt）
+  │
+  ├─ 2. 各データソースの最新データを取得
+  │     - HealthRecord: 最新の健康診断
+  │     - FitData: 直近7日間の平均
+  │     - Supplement: 現在のサプリ一覧
+  │
+  ├─ 3. 前回取り込み以降の新規データがあるか判定
+  │
+  └─ 4. 新規データがある場合、APIレスポンスに含める
+        {
+          "hasNewExternalData": true,
+          "newDataSummary": {
+            "healthRecord": { "date": "2026-01-15", "items": ["血圧", "体重", "所見"] },
+            "fitData": { "period": "直近7日", "items": ["平均睡眠時間", "平均歩数"] }
+          }
+        }
+```
+
+#### 2. フロントエンド表示（取り込み確認UI）
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  💡 新しいデータがあります                                    │
+│                                                             │
+│  【健康診断 (2026/01/15)】                                   │
+│  ・血圧: 128/82 mmHg (所見: やや高め)                        │
+│  ・体重: 72.5kg                                              │
+│  ・HbA1c: 5.8%                                              │
+│  ・医師コメント: 「血圧が少し高いですね。塩分を...」          │
+│                                                             │
+│  【Fitbit (直近7日平均)】                                     │
+│  ・平均睡眠時間: 6時間32分                                   │
+│  ・平均歩数: 7,842歩                                         │
+│                                                             │
+│  [すべて取り込む]  [選択して取り込む]  [スキップ]             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 3. データ取り込みAPI
+
+```
+POST /api/health-chat/import
+
+Request:
+{
+  "sources": ["healthRecord", "fitData"],  // 取り込むソース
+  "sessionId": "xxx"
+}
+
+Response:
+{
+  "success": true,
+  "imported": {
+    "questionsAnswered": ["1-2", "1-8", "5-1", "8-5"],
+    "profileUpdates": [
+      { "sectionId": "basic_attributes", "addedText": "・体重: 72.5kg\n・血圧: 128/82 mmHg" },
+      { "sectionId": "medical_history", "addedText": "【2026年1月健診所見】血圧がやや高め..." }
+    ]
+  },
+  "message": "4件の質問に自動回答しました"
+}
+```
+
+#### 4. 手動コマンド対応
+
+チャット中に以下のフレーズで取り込みを指示可能:
+
+- 「診断データを読み込んで」
+- 「健康診断のデータを取り込んで」
+- 「Fitbitのデータを反映して」
+- 「外部データを取り込んで」
+
+```
+User: 診断データを読み込んで
+
+AI: 健康診断データを確認しました。以下の情報を取り込みます：
+
+    【2026年1月15日の健診結果】
+    ・血圧: 128/82 mmHg → 質問1-8を回答済みにしました
+    ・体重: 72.5kg → 質問1-2を回答済みにしました
+    ・所見: 「血圧がやや高め。塩分を控えめに」→ 病歴セクションに追記しました
+
+    合計3件の質問をスキップしました。
+
+    それでは次の質問です。
+    直近の体脂肪率、筋肉量、内臓脂肪レベルのデータはありますか？
+```
+
+### AI処理フロー
+
+外部データの取り込みはAIを使って柔軟に処理:
+
+```
+外部データ（数値 + テキスト）
+  │
+  ├─ AIに渡すプロンプト:
+  │   「以下の健康診断データから、健康プロフィールに
+  │     反映すべき情報を抽出してください。
+  │     数値だけでなく、所見やコメントも含めてください。」
+  │
+  ├─ AIが解釈:
+  │   - 数値: 対応する質問を回答済みにマーク
+  │   - 所見: 該当セクションにテキストとして追記
+  │   - コメント: 関連するセクションに追記
+  │
+  └─ 結果をプロフィールに反映
+```
+
+### データベース変更
+
+```sql
+-- 外部データ取り込み履歴を追跡するカラムを追加
+ALTER TABLE "HealthChatSession" ADD COLUMN "lastExternalDataCheck" TIMESTAMP;
+ALTER TABLE "HealthChatSession" ADD COLUMN "lastImportedAt" TIMESTAMP;
+
+-- 質問進捗に取り込み元を記録
+ALTER TABLE "HealthQuestionProgress" ADD COLUMN "source" TEXT;
+-- source: 'chat' | 'external_healthrecord' | 'external_fitbit' | 'profile_validation'
+```
+
+### 新規API
+
+#### POST `/api/health-chat/import`
+
+外部データの取り込み実行
+
+**Request:**
+```json
+{
+  "sessionId": "xxx",
+  "sources": ["healthRecord", "fitData", "supplement"],
+  "options": {
+    "healthRecordId": "specific-record-id",  // 特定のレコードを指定（省略時は最新）
+    "fitDataDays": 7  // 何日分の平均を取るか
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "imported": {
+    "questionsAnswered": [
+      { "questionId": "1-2", "source": "healthRecord", "value": "体重: 72.5kg" },
+      { "questionId": "1-8", "source": "healthRecord", "value": "血圧: 128/82" }
+    ],
+    "profileUpdates": [
+      {
+        "sectionId": "basic_attributes",
+        "addedText": "【2026年1月健診より】\n・体重: 72.5kg\n・血圧: 128/82 mmHg"
+      },
+      {
+        "sectionId": "medical_history",
+        "addedText": "【2026年1月健診所見】\n血圧がやや高め。塩分を控えめに。"
+      }
+    ],
+    "skippedQuestions": ["1-3", "1-5"]  // データがなかった質問
+  },
+  "summary": "4件の質問に自動回答し、2つのセクションを更新しました"
+}
+```
+
+#### GET `/api/health-chat/external-data`
+
+取り込み可能な外部データのプレビュー
+
+**Response:**
+```json
+{
+  "hasNewData": true,
+  "lastChecked": "2026-02-05T10:00:00Z",
+  "available": {
+    "healthRecord": {
+      "hasNew": true,
+      "latestDate": "2026-01-15",
+      "preview": {
+        "numbers": [
+          { "name": "血圧", "value": "128/82 mmHg" },
+          { "name": "体重", "value": "72.5kg" }
+        ],
+        "texts": [
+          { "type": "findings", "preview": "血圧がやや高め。塩分を..." }
+        ]
+      },
+      "relatedQuestions": ["1-2", "1-8", "3-3"]
+    },
+    "fitData": {
+      "hasNew": true,
+      "period": "2026-01-29 〜 2026-02-05",
+      "preview": {
+        "avgSleep": "6時間32分",
+        "avgSteps": "7,842歩"
+      },
+      "relatedQuestions": ["5-1", "8-5"]
+    }
+  }
+}
+```
+
+### 実装ファイル
+
+```
+src/
+├── app/
+│   └── api/
+│       └── health-chat/
+│           ├── import/route.ts        # データ取り込みAPI
+│           └── external-data/route.ts # 外部データプレビューAPI
+├── constants/
+│   └── external-data-mapping.ts       # データソース→質問マッピング
+├── lib/
+│   └── external-data-importer.ts      # 取り込みロジック
+└── components/
+    └── health-profile/
+        └── ExternalDataDialog.tsx     # 取り込み確認UI
+```
+
+---
+
 ## トラブルシューティング
 
 ### AI検証が動作しない場合

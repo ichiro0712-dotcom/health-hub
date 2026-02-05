@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Loader2, X, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import { MessageCircle, Send, Loader2, X, ChevronDown, ChevronUp, CheckCircle2, Database, FileText, Activity, Moon, Heart, Pill } from 'lucide-react';
 import { toast } from 'sonner';
 import ChatProgress from './ChatProgress';
 
@@ -24,6 +24,46 @@ interface Progress {
   answeredCount: number;
   totalCount: number;
   sections: SectionProgress[];
+}
+
+// 外部データプレビューの型
+interface ExtractedDataItem {
+  source: string;
+  field: string;
+  value: string;
+  questionId: string | null;
+}
+
+interface ExternalDataPreview {
+  hasNewData: boolean;
+  available: {
+    healthRecord?: {
+      hasNew: boolean;
+      latestDate: string;
+      title?: string;
+      items: ExtractedDataItem[];
+      texts: { type: string; content: string }[];
+    };
+    fitData?: {
+      hasNew: boolean;
+      period: string;
+      items: ExtractedDataItem[];
+    };
+    detailedSleep?: {
+      hasNew: boolean;
+      period: string;
+      items: ExtractedDataItem[];
+    };
+    hrvData?: {
+      hasNew: boolean;
+      period: string;
+      items: ExtractedDataItem[];
+    };
+    supplement?: {
+      hasNew: boolean;
+      items: ExtractedDataItem[];
+    };
+  };
 }
 
 interface ChatHearingProps {
@@ -49,6 +89,9 @@ export default function ChatHearing({ onContentUpdated }: ChatHearingProps) {
   const [showProgress, setShowProgress] = useState(true);
   const [showPriority3Complete, setShowPriority3Complete] = useState(false);
   const [priority3JustCompleted, setPriority3JustCompleted] = useState(false);
+  const [externalData, setExternalData] = useState<ExternalDataPreview | null>(null);
+  const [showExternalDataPrompt, setShowExternalDataPrompt] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -81,6 +124,64 @@ export default function ChatHearing({ onContentUpdated }: ChatHearingProps) {
     }
   }, [messages]);
 
+  // 外部データを確認
+  const checkExternalData = async () => {
+    try {
+      const res = await fetch('/api/health-chat/external-data');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.hasNewData) {
+          setExternalData(data);
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error('External data check error:', error);
+    }
+    return false;
+  };
+
+  // 外部データを取り込む
+  const importExternalData = async (sources: string[]) => {
+    if (!sessionId) return;
+
+    setIsImporting(true);
+    try {
+      const res = await fetch('/api/health-chat/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sources, sessionId })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // 取り込み結果をメッセージとして追加
+        if (data.questionsAnswered && data.questionsAnswered.length > 0) {
+          const importedItems = data.questionsAnswered
+            .map((q: { value: string }) => `・${q.value}`)
+            .join('\n');
+
+          setMessages(prev => [...prev, {
+            id: generateMessageId(),
+            role: 'assistant',
+            content: `外部データから以下の情報を取り込みました：\n\n${importedItems}\n\n${data.summary}`
+          }]);
+
+          // 進捗を更新
+          await fetchSessionInfo();
+          onContentUpdated?.();
+        }
+        toast.success('外部データを取り込みました');
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error('外部データの取り込みに失敗しました');
+    } finally {
+      setIsImporting(false);
+      setShowExternalDataPrompt(false);
+    }
+  };
+
   // チャット開始
   const startChat = async () => {
     setIsInitializing(true);
@@ -110,6 +211,13 @@ export default function ChatHearing({ onContentUpdated }: ChatHearingProps) {
         setMessages([{ id: generateMessageId(), role: 'assistant', content: data.welcomeMessage }]);
       }
       setIsOpen(true);
+
+      // 外部データを確認
+      setInitializingMessage('外部データを確認中...');
+      const hasExternalData = await checkExternalData();
+      if (hasExternalData) {
+        setShowExternalDataPrompt(true);
+      }
     } catch (error) {
       console.error('Start chat error:', error);
       toast.error('チャットの開始に失敗しました');
@@ -378,6 +486,127 @@ export default function ChatHearing({ onContentUpdated }: ChatHearingProps) {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* 外部データ取り込み確認ダイアログ */}
+      {showExternalDataPrompt && externalData && (
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/30 border-t border-blue-200 dark:border-blue-700">
+          <div className="flex items-center gap-2 mb-3">
+            <Database className="w-5 h-5 text-blue-500" />
+            <span className="font-bold text-blue-700 dark:text-blue-300">外部データが見つかりました</span>
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+            以下のデータを健康プロフィールに取り込めます：
+          </p>
+
+          <div className="space-y-2 mb-4">
+            {externalData.available.healthRecord && (
+              <div className="flex items-center gap-2 text-sm bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                <FileText className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">健康診断</span>
+                  <span className="text-slate-500 dark:text-slate-400 ml-2">
+                    {externalData.available.healthRecord.latestDate}
+                    {externalData.available.healthRecord.title && ` - ${externalData.available.healthRecord.title}`}
+                  </span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {externalData.available.healthRecord.items.length}項目
+                    {externalData.available.healthRecord.texts.length > 0 && ` + ${externalData.available.healthRecord.texts.length}件のコメント`}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {externalData.available.fitData && (
+              <div className="flex items-center gap-2 text-sm bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                <Activity className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">フィットネスデータ</span>
+                  <span className="text-slate-500 dark:text-slate-400 ml-2">
+                    {externalData.available.fitData.period}
+                  </span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {externalData.available.fitData.items.map(i => i.field).join('、')}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {externalData.available.detailedSleep && (
+              <div className="flex items-center gap-2 text-sm bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                <Moon className="w-4 h-4 text-purple-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">詳細睡眠データ</span>
+                  <span className="text-slate-500 dark:text-slate-400 ml-2">
+                    {externalData.available.detailedSleep.period}
+                  </span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {externalData.available.detailedSleep.items.map(i => i.field).join('、')}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {externalData.available.hrvData && (
+              <div className="flex items-center gap-2 text-sm bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                <Heart className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">HRVデータ</span>
+                  <span className="text-slate-500 dark:text-slate-400 ml-2">
+                    {externalData.available.hrvData.period}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {externalData.available.supplement && (
+              <div className="flex items-center gap-2 text-sm bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                <Pill className="w-4 h-4 text-teal-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">サプリメント</span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {externalData.available.supplement.items.length}種類
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const sources: string[] = [];
+                if (externalData.available.healthRecord) sources.push('healthRecord');
+                if (externalData.available.fitData) sources.push('fitData');
+                if (externalData.available.detailedSleep) sources.push('detailedSleep');
+                if (externalData.available.hrvData) sources.push('hrvData');
+                if (externalData.available.supplement) sources.push('supplement');
+                importExternalData(sources);
+              }}
+              disabled={isImporting}
+              className="flex-1 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  取り込み中...
+                </>
+              ) : (
+                <>
+                  <Database className="w-4 h-4" />
+                  すべて取り込む
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setShowExternalDataPrompt(false)}
+              disabled={isImporting}
+              className="flex-1 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-medium text-sm disabled:opacity-50"
+            >
+              あとで
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 重要度3完了確認ダイアログ */}
       {showPriority3Complete && (

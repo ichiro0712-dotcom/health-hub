@@ -3,6 +3,7 @@ import { getToken } from 'next-auth/jwt';
 import prisma from '@/lib/prisma';
 import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
+import { getExternalDataPreview, importExternalData } from '@/lib/external-data-importer';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
@@ -250,6 +251,9 @@ export async function POST(req: NextRequest) {
     // 「ここまで保存して」の検出
     const isSaveRequest = /ここまで保存|保存して|終わり|やめ|中断/.test(trimmedMessage);
 
+    // 「外部データ取り込み」コマンドの検出
+    const isImportRequest = /診断データ|健診データ|検査データ|フィットネスデータ|fitbit|外部データ|データ.*読み込|データ.*取り込|インポート/.test(trimmedMessage.toLowerCase());
+
     // セッションを取得または作成（所有者検証付き）
     let session = sessionId
       ? await prisma.healthChatSession.findFirst({
@@ -327,6 +331,89 @@ export async function POST(req: NextRequest) {
         sessionId: session.id,
         sessionStatus: 'paused',
         progress
+      });
+    }
+
+    // 外部データ取り込みリクエストの処理
+    if (isImportRequest) {
+      // 利用可能な外部データを確認
+      const preview = await getExternalDataPreview(user.id);
+
+      if (!preview.hasNewData && Object.keys(preview.available).length === 0) {
+        // データがない場合
+        const noDataResponse = '現在、取り込み可能な外部データはありません。\n\n健康診断データやFitbitなどのフィットネスデータを登録すると、こちらから取り込むことができます。';
+
+        await prisma.healthChatMessage.createMany({
+          data: [
+            { sessionId: session.id, role: 'user', content: userMessage },
+            { sessionId: session.id, role: 'assistant', content: noDataResponse }
+          ]
+        });
+
+        const progress = await calculateProgress(user.id);
+
+        return NextResponse.json({
+          success: true,
+          response: noDataResponse,
+          sessionId: session.id,
+          sessionStatus: 'active',
+          progress
+        });
+      }
+
+      // データがある場合は取り込み実行
+      const sources: ('healthRecord' | 'fitData' | 'detailedSleep' | 'hrvData' | 'supplement')[] = [];
+      if (preview.available.healthRecord) sources.push('healthRecord');
+      if (preview.available.fitData) sources.push('fitData');
+      if (preview.available.detailedSleep) sources.push('detailedSleep');
+      if (preview.available.hrvData) sources.push('hrvData');
+      if (preview.available.supplement) sources.push('supplement');
+
+      const importResult = await importExternalData(user.id, sources, session.id);
+
+      // レスポンスメッセージを構築
+      let importResponse = '外部データを取り込みました！\n\n';
+
+      if (importResult.questionsAnswered.length > 0) {
+        importResponse += '【取り込んだ情報】\n';
+        importResponse += importResult.questionsAnswered
+          .map(q => `・${q.value}`)
+          .join('\n');
+        importResponse += '\n\n';
+      }
+
+      importResponse += importResult.summary;
+
+      // 次の質問を取得
+      const updatedAnsweredProgress = await prisma.healthQuestionProgress.findMany({
+        where: { userId: user.id, isAnswered: true }
+      });
+      const updatedAnsweredIds = updatedAnsweredProgress.map((p: { questionId: string }) => p.questionId);
+      const nextQuestionAfterImport = getNextQuestion(updatedAnsweredIds, currentPriority);
+
+      if (nextQuestionAfterImport) {
+        importResponse += `\n\nそれでは質問を続けます。\n\n${nextQuestionAfterImport.question}`;
+      }
+
+      await prisma.healthChatMessage.createMany({
+        data: [
+          { sessionId: session.id, role: 'user', content: userMessage },
+          { sessionId: session.id, role: 'assistant', content: importResponse }
+        ]
+      });
+
+      const progress = await calculateProgress(user.id);
+
+      return NextResponse.json({
+        success: true,
+        response: importResponse,
+        sessionId: session.id,
+        sessionStatus: 'active',
+        progress,
+        updatedContent: importResult.profileUpdates.length > 0 ? {
+          sectionId: importResult.profileUpdates[0].sectionId,
+          appendedText: importResult.profileUpdates[0].addedText
+        } : null
       });
     }
 
