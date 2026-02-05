@@ -51,7 +51,7 @@ export default function ChatHearing({ onContentUpdated }: ChatHearingProps) {
   const [priority3JustCompleted, setPriority3JustCompleted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // 進捗情報を取得
   const fetchSessionInfo = useCallback(async () => {
@@ -410,7 +410,7 @@ export default function ChatHearing({ onContentUpdated }: ChatHearingProps) {
       <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
         <div className="flex items-end gap-2">
           <textarea
-            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+            ref={inputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
