@@ -39,6 +39,7 @@ ${existingContent}
 - 1つずつ質問し、回答を待つ
 - 回答から必要な情報を抽出し、プロフィールに反映できる形でまとめる
 - **既存の情報がある場合は内容を確認し、不足があれば追加質問する**
+- **ユーザーが情報の削除や修正を求めた場合は、適切に対応する**
 
 ## ルール
 1. 1度に1つの質問のみ行う
@@ -47,6 +48,8 @@ ${existingContent}
 4. 回答に対して簡潔な相槌やコメントを入れてから次の質問へ進む
 5. ユーザーの回答から健康プロフィールに記載すべき情報を抽出する
 6. **既存情報が意味をなさない場合（例：「あああ」「テスト」など）は無効とみなし、改めて質問する**
+7. **ユーザーが「削除して」「消して」「やめた」「なくなった」などと言った場合は、該当情報を削除する**
+8. **ユーザーが「変更して」「修正して」「実は○○」などと言った場合は、情報を更新する**
 
 ## 現在の状態
 - 回答済み質問数: ${answeredCount}/${totalPriority3}（必須質問）
@@ -72,13 +75,22 @@ ${currentQuestion ? `
 {
   "questionId": "${currentQuestion?.id || ''}",
   "sectionId": "${currentQuestion?.sectionId || ''}",
+  "action": "add" または "delete" または "replace",
   "extractedInfo": {
     "項目名": "値"
   },
   "profileText": "プロフィールに追記するテキスト（箇条書き形式）",
+  "deleteText": "削除すべきテキスト（action=deleteまたはreplaceの場合）",
   "existingDataValid": true または false（既存データが有効かどうか）
 }
-EXTRACTED_DATA-->`;
+EXTRACTED_DATA-->
+
+## actionの説明
+- "add": 新しい情報を追記（デフォルト）
+- "delete": 既存情報を削除（ユーザーが「削除して」「消して」と言った場合）
+- "replace": 既存情報を置換（ユーザーが「変更して」「修正して」と言った場合）
+
+deleteTextには、削除または置換対象のテキスト（部分一致で検索される）を指定してください。`;
 }
 
 // Gemini APIを呼び出す（チャット用: Flash モデルで高速応答）
@@ -122,8 +134,10 @@ function parseExtractedData(response: string): {
   extractedData: {
     questionId: string;
     sectionId: string;
+    action?: 'add' | 'delete' | 'replace';
     extractedInfo: Record<string, string>;
     profileText: string;
+    deleteText?: string;
   } | null;
 } {
   // 完全な形式でマッチを試みる
@@ -535,26 +549,9 @@ export async function POST(req: NextRequest) {
       })
     ];
 
-    // 抽出データがある場合、進捗と健康プロフを並列で更新
-    if (extractedData && extractedData.questionId && extractedData.profileText) {
-      // 質問進捗を更新
-      dbOperations.push(
-        prisma.healthQuestionProgress.upsert({
-          where: { userId_questionId: { userId: user.id, questionId: extractedData.questionId } },
-          create: {
-            userId: user.id,
-            questionId: extractedData.questionId,
-            sectionId: extractedData.sectionId,
-            priority: nextQuestion?.priority || 3,
-            isAnswered: true,
-            answerSummary: extractedData.profileText
-          },
-          update: {
-            isAnswered: true,
-            answerSummary: extractedData.profileText
-          }
-        })
-      );
+    // 抽出データがある場合、進捗と健康プロフを更新
+    if (extractedData && extractedData.sectionId) {
+      const action = extractedData.action || 'add';
 
       // 健康プロフィールを更新（既存データ取得後に実行）
       const section = await prisma.healthProfileSection.findUnique({
@@ -562,10 +559,80 @@ export async function POST(req: NextRequest) {
       });
 
       const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === extractedData.sectionId)?.title || extractedData.sectionId;
-      const newContent = section?.content
-        ? `${section.content}\n${extractedData.profileText}`
-        : extractedData.profileText;
+      let newContent = section?.content || '';
 
+      if (action === 'delete' && extractedData.deleteText) {
+        // 削除アクション: deleteTextに一致する行を削除
+        const lines = newContent.split('\n');
+        const filteredLines = lines.filter(line => !line.includes(extractedData.deleteText!));
+        newContent = filteredLines.join('\n').trim();
+
+        // 質問進捗も削除対象の場合は未回答に戻す
+        if (extractedData.questionId) {
+          dbOperations.push(
+            prisma.healthQuestionProgress.updateMany({
+              where: { userId: user.id, questionId: extractedData.questionId },
+              data: { isAnswered: false, answerSummary: null }
+            })
+          );
+        }
+      } else if (action === 'replace' && extractedData.deleteText && extractedData.profileText) {
+        // 置換アクション: deleteTextを削除して、profileTextを追加
+        const lines = newContent.split('\n');
+        const filteredLines = lines.filter(line => !line.includes(extractedData.deleteText!));
+        newContent = filteredLines.length > 0
+          ? `${filteredLines.join('\n')}\n${extractedData.profileText}`.trim()
+          : extractedData.profileText;
+
+        // 質問進捗を更新
+        if (extractedData.questionId) {
+          dbOperations.push(
+            prisma.healthQuestionProgress.upsert({
+              where: { userId_questionId: { userId: user.id, questionId: extractedData.questionId } },
+              create: {
+                userId: user.id,
+                questionId: extractedData.questionId,
+                sectionId: extractedData.sectionId,
+                priority: nextQuestion?.priority || 3,
+                isAnswered: true,
+                answerSummary: extractedData.profileText
+              },
+              update: {
+                isAnswered: true,
+                answerSummary: extractedData.profileText
+              }
+            })
+          );
+        }
+      } else if (action === 'add' && extractedData.profileText) {
+        // 追加アクション（デフォルト）
+        newContent = newContent
+          ? `${newContent}\n${extractedData.profileText}`
+          : extractedData.profileText;
+
+        // 質問進捗を更新
+        if (extractedData.questionId) {
+          dbOperations.push(
+            prisma.healthQuestionProgress.upsert({
+              where: { userId_questionId: { userId: user.id, questionId: extractedData.questionId } },
+              create: {
+                userId: user.id,
+                questionId: extractedData.questionId,
+                sectionId: extractedData.sectionId,
+                priority: nextQuestion?.priority || 3,
+                isAnswered: true,
+                answerSummary: extractedData.profileText
+              },
+              update: {
+                isAnswered: true,
+                answerSummary: extractedData.profileText
+              }
+            })
+          );
+        }
+      }
+
+      // プロフィールセクションを更新
       dbOperations.push(
         prisma.healthProfileSection.upsert({
           where: { userId_categoryId: { userId: user.id, categoryId: extractedData.sectionId } },
