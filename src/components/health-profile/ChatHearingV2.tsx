@@ -1,17 +1,16 @@
 'use client';
 
 /**
- * ChatHearingV2 - 新アーキテクチャ対応チャットコンポーネント
+ * ChatHearingV2 - 楽観的UI対応チャットコンポーネント
  *
- * 変更点:
- * - v2 APIを使用（Google Docsを信頼できる情報源として使用）
- * - 進捗バーを廃止（固定質問リストに依存しない）
- * - シンプルなUI
- * - 検出された問題を表示
+ * 高速起動:
+ * - 既存セッションがあれば即座に表示
+ * - 新規の場合はウェルカムメッセージ表示中にバックグラウンドでGoogle Docs同期
+ * - Google Docsには既に外部データ（健康診断等）も含まれているため、別途取り込みは不要
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Loader2, X, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { MessageCircle, Send, Loader2, X, RefreshCw, CloudOff, Cloud } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Message {
@@ -24,8 +23,7 @@ interface SessionContext {
   hasProfile: boolean;
   hasRecords: boolean;
   profileSummary: string | null;
-  profileCharCount: number;
-  recordsCharCount: number;
+  synced: boolean;
 }
 
 interface ChatHearingV2Props {
@@ -42,6 +40,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -60,42 +59,39 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
     }
   }, [messages]);
 
-  // セッション情報を取得
-  const fetchSessionInfo = useCallback(async () => {
+  // バックグラウンドでGoogle Docsを同期
+  const syncGoogleDocs = useCallback(async () => {
+    setIsSyncing(true);
     try {
-      const res = await fetch('/api/health-chat/v2/session');
-      if (!res.ok) throw new Error('Failed to fetch session');
+      const res = await fetch('/api/health-chat/v2/session', { method: 'POST' });
+      if (!res.ok) throw new Error('Sync failed');
       const data = await res.json();
-
-      if (data.status === 'paused') {
-        setSessionId(data.sessionId);
-        setSessionStatus('paused');
-      }
       setContext(data.context);
+      return data.context;
     } catch (error) {
-      console.error('Session fetch error:', error);
+      console.error('Sync error:', error);
+      return null;
+    } finally {
+      setIsSyncing(false);
     }
   }, []);
 
-  // 初期読み込み
-  useEffect(() => {
-    fetchSessionInfo();
-  }, [fetchSessionInfo]);
-
-  // チャット開始
+  // チャット開始（楽観的UI）
   const startChat = async () => {
     setIsInitializing(true);
+    setIsOpen(true);  // 即座に開く
 
     try {
+      // まずセッション情報を高速取得（DBのみ）
       const res = await fetch('/api/health-chat/v2/session');
       if (!res.ok) throw new Error('Failed to start session');
 
       const data = await res.json();
       setSessionId(data.sessionId);
-      setSessionStatus('active');
+      setSessionStatus(data.status);
       setContext(data.context);
 
-      // メッセージを復元または新規作成
+      // 既存のメッセージがあれば表示
       if (data.messages && data.messages.length > 0) {
         const restoredMessages: Message[] = data.messages.map((m: { id: string; role: 'user' | 'assistant'; content: string }) => ({
           id: m.id || generateMessageId(),
@@ -104,6 +100,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         }));
         setMessages(restoredMessages);
       } else {
+        // 新規セッション: ウェルカムメッセージを表示
         setMessages([{
           id: generateMessageId(),
           role: 'assistant',
@@ -111,11 +108,17 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         }]);
       }
 
-      setIsOpen(true);
+      setIsInitializing(false);
+
+      // バックグラウンドでGoogle Docs同期
+      if (!data.context.synced) {
+        syncGoogleDocs();
+      }
+
     } catch (error) {
       console.error('Start chat error:', error);
       toast.error('チャットの開始に失敗しました');
-    } finally {
+      setIsOpen(false);
       setIsInitializing(false);
     }
   };
@@ -142,11 +145,25 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         content: data.welcomeMessage
       }]);
       setHasUpdates(false);
+
+      // バックグラウンドで同期
+      syncGoogleDocs();
+
     } catch (error) {
       console.error('Start new session error:', error);
       toast.error('新規セッションの開始に失敗しました');
     } finally {
       setIsInitializing(false);
+    }
+  };
+
+  // 手動同期ボタン
+  const handleManualSync = async () => {
+    const newContext = await syncGoogleDocs();
+    if (newContext) {
+      toast.success('データを同期しました');
+    } else {
+      toast.error('同期に失敗しました');
     }
   };
 
@@ -226,19 +243,11 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
             <MessageCircle className="w-5 h-5 text-teal-500" />
             <h2 className="font-bold text-slate-800 dark:text-white">AIチャット</h2>
           </div>
-          {context?.hasProfile && (
-            <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" />
-              プロフィールあり
-            </span>
-          )}
         </div>
 
-        {context && (
-          <div className="mb-4 text-xs text-slate-500 dark:text-slate-400">
-            {context.profileSummary || 'AIと対話しながら健康プロフィールを作成・更新できます'}
-          </div>
-        )}
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          AIと対話しながら健康プロフィールを作成・更新できます
+        </p>
 
         <button
           onClick={startChat}
@@ -249,11 +258,6 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
               準備中...
-            </>
-          ) : sessionStatus === 'paused' ? (
-            <>
-              <MessageCircle className="w-4 h-4" />
-              続きから再開する
             </>
           ) : (
             <>
@@ -285,6 +289,21 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* 同期ボタン */}
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncing || isInitializing || isLoading}
+            className="p-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors"
+            title={context?.synced ? 'データ同期済み' : 'Google Docsと同期'}
+          >
+            {isSyncing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : context?.synced ? (
+              <Cloud className="w-4 h-4" />
+            ) : (
+              <CloudOff className="w-4 h-4" />
+            )}
+          </button>
           <button
             onClick={startNewSession}
             disabled={isInitializing || isLoading}
@@ -302,21 +321,24 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         </div>
       </div>
 
-      {/* コンテキスト情報 */}
-      {context && (
-        <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1">
-            {context.hasProfile ? (
-              <><CheckCircle2 className="w-3 h-3 text-green-500" /> プロフィール読込済</>
-            ) : (
-              <><AlertCircle className="w-3 h-3 text-yellow-500" /> 新規作成モード</>
-            )}
-          </span>
-          {context.hasRecords && (
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-green-500" /> 診断記録あり
-            </span>
-          )}
+      {/* 同期状態バー（未同期の場合のみ表示） */}
+      {!context?.synced && !isSyncing && (
+        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
+          <span>最新のGoogle Docsデータを読み込んでいません</span>
+          <button
+            onClick={handleManualSync}
+            className="text-amber-700 dark:text-amber-300 hover:underline font-medium"
+          >
+            同期する
+          </button>
+        </div>
+      )}
+
+      {/* 同期中バー */}
+      {isSyncing && (
+        <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Google Docsからデータを読み込み中...
         </div>
       )}
 
@@ -325,41 +347,48 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         ref={messagesContainerRef}
         className="h-[50vh] min-h-[280px] max-h-[400px] overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-900"
       >
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2 ${
-                message.role === 'user'
-                  ? 'bg-teal-500 text-white rounded-br-md'
-                  : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-md'
-              }`}
-            >
-              <div className="text-sm whitespace-pre-wrap">
-                {/* マークダウンの見出しをスタイリング */}
-                {message.content.split('\n').map((line, i) => {
-                  if (line.startsWith('**') && line.endsWith('**')) {
-                    return <strong key={i} className="block font-bold">{line.slice(2, -2)}</strong>;
-                  }
-                  if (line.startsWith('---')) {
-                    return <hr key={i} className="my-2 border-slate-300 dark:border-slate-600" />;
-                  }
-                  return <span key={i}>{line}{i < message.content.split('\n').length - 1 && <br />}</span>;
-                })}
+        {isInitializing ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+          </div>
+        ) : (
+          <>
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2 ${
+                    message.role === 'user'
+                      ? 'bg-teal-500 text-white rounded-br-md'
+                      : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-md'
+                  }`}
+                >
+                  <div className="text-sm whitespace-pre-wrap">
+                    {message.content.split('\n').map((line, i) => {
+                      if (line.startsWith('**') && line.endsWith('**')) {
+                        return <strong key={i} className="block font-bold">{line.slice(2, -2)}</strong>;
+                      }
+                      if (line.startsWith('---')) {
+                        return <hr key={i} className="my-2 border-slate-300 dark:border-slate-600" />;
+                      }
+                      return <span key={i}>{line}{i < message.content.split('\n').length - 1 && <br />}</span>;
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-bl-md px-4 py-2">
-              <Loader2 className="w-4 h-4 animate-spin text-teal-500" />
-            </div>
-          </div>
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-bl-md px-4 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-teal-500" />
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* 入力エリア */}
@@ -371,7 +400,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={sessionStatus === 'paused' ? 'セッションは保存されました' : 'メッセージを入力...'}
-            disabled={isLoading || sessionStatus === 'paused'}
+            disabled={isLoading || sessionStatus === 'paused' || isInitializing}
             rows={1}
             className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-600 rounded-2xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:opacity-50 resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
             style={{ height: 'auto' }}
@@ -383,7 +412,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
           />
           <button
             onClick={sendMessage}
-            disabled={isLoading || !inputValue.trim() || sessionStatus === 'paused'}
+            disabled={isLoading || !inputValue.trim() || sessionStatus === 'paused' || isInitializing}
             className="p-2 bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           >
             <Send className="w-5 h-5" />
