@@ -138,6 +138,17 @@ function parseExtractedData(response: string): {
     cleanResponse = response.split('<!--')[0].trim();
   }
 
+  // ```json や ``` で囲まれたJSONブロックを除去（AIが誤ってコードブロックで出力した場合）
+  cleanResponse = cleanResponse.replace(/```json[\s\S]*?```/g, '').trim();
+  cleanResponse = cleanResponse.replace(/```[\s\S]*?```/g, '').trim();
+
+  // 単独の ``` も除去（閉じタグがない場合）
+  cleanResponse = cleanResponse.replace(/```json[\s\S]*/g, '').trim();
+  cleanResponse = cleanResponse.replace(/```[\s\S]*/g, '').trim();
+
+  // 中括弧で始まる行（JSONっぽいもの）を除去
+  cleanResponse = cleanResponse.replace(/^\s*\{[\s\S]*?\}\s*$/gm, '').trim();
+
   // それでも空なら、デフォルトメッセージ
   if (!cleanResponse) {
     cleanResponse = 'ありがとうございます。次の質問に進みます。';
@@ -442,9 +453,24 @@ export async function POST(req: NextRequest) {
       : answeredIds;
     const newNextQuestion = getNextQuestion(updatedAnsweredIds, currentPriority);
 
-    // AIの応答に次の質問が含まれていない場合、追加する
+    // AIの応答に次の質問が含まれていない場合のみ追加する
+    // 重複防止: AIが既に質問を含めている場合はシステムからは追加しない
     let finalResponse = cleanResponse;
-    if (newNextQuestion && !cleanResponse.includes('？')) {
+
+    // AIの応答に既に質問が含まれているかをより厳密にチェック
+    const hasQuestionInResponse = cleanResponse.includes('？') ||
+                                   cleanResponse.includes('それでは次の質問') ||
+                                   cleanResponse.includes('次の質問です');
+
+    // AIの応答に現在の質問のキーワードが含まれているかチェック（同じ質問の重複防止）
+    const currentQuestionKeywords = nextQuestion?.question.slice(0, 20) || '';
+    const hasCurrentQuestionInResponse = currentQuestionKeywords && cleanResponse.includes(currentQuestionKeywords);
+
+    // 次の質問のキーワードが含まれているかチェック
+    const nextQuestionKeywords = newNextQuestion?.question.slice(0, 20) || '';
+    const hasNextQuestionInResponse = nextQuestionKeywords && cleanResponse.includes(nextQuestionKeywords);
+
+    if (newNextQuestion && !hasQuestionInResponse && !hasCurrentQuestionInResponse && !hasNextQuestionInResponse) {
       finalResponse = `${cleanResponse}\n\nそれでは次の質問です。\n\n${newNextQuestion.question}`;
     }
 
