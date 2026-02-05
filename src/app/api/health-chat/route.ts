@@ -79,7 +79,7 @@ ${currentQuestion ? `
 EXTRACTED_DATA-->`;
 }
 
-// Gemini APIを呼び出す
+// Gemini APIを呼び出す（チャット用: Flash モデルで高速応答）
 async function callGeminiAPI(messages: { role: string; content: string }[], systemPrompt: string): Promise<string> {
   const contents = messages.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
@@ -87,7 +87,7 @@ async function callGeminiAPI(messages: { role: string; content: string }[], syst
   }));
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GOOGLE_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -349,35 +349,69 @@ export async function POST(req: NextRequest) {
     // 抽出データをパース
     const { cleanResponse, extractedData } = parseExtractedData(aiResponse);
 
-    // ユーザーメッセージを保存
-    await prisma.healthChatMessage.create({
-      data: {
-        sessionId: session.id,
-        role: 'user',
-        content: userMessage
-      }
-    });
+    // セッション状態を更新（先に次の質問を計算）
+    const updatedAnsweredIds = extractedData
+      ? [...answeredIds, extractedData.questionId]
+      : answeredIds;
+    const newNextQuestion = getNextQuestion(updatedAnsweredIds, currentPriority);
 
-    // 抽出データがある場合、進捗と健康プロフを更新
+    // AIの応答に次の質問が含まれていない場合、追加する
+    let finalResponse = cleanResponse;
+    if (newNextQuestion && !cleanResponse.includes('？')) {
+      finalResponse = `${cleanResponse}\n\nそれでは次の質問です。\n\n${newNextQuestion.question}`;
+    }
+
+    // DB処理を並列実行（パフォーマンス最適化）
+    const dbOperations: Promise<unknown>[] = [
+      // ユーザーメッセージを保存
+      prisma.healthChatMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'user',
+          content: userMessage
+        }
+      }),
+      // AIレスポンスを保存
+      prisma.healthChatMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'assistant',
+          content: finalResponse,
+          questionId: newNextQuestion?.id
+        }
+      }),
+      // セッション状態を更新
+      prisma.healthChatSession.update({
+        where: { id: session.id },
+        data: {
+          currentQuestionId: newNextQuestion?.id || null,
+          currentSectionId: newNextQuestion?.sectionId || null
+        }
+      })
+    ];
+
+    // 抽出データがある場合、進捗と健康プロフを並列で更新
     if (extractedData && extractedData.questionId && extractedData.profileText) {
       // 質問進捗を更新
-      await prisma.healthQuestionProgress.upsert({
-        where: { userId_questionId: { userId: user.id, questionId: extractedData.questionId } },
-        create: {
-          userId: user.id,
-          questionId: extractedData.questionId,
-          sectionId: extractedData.sectionId,
-          priority: nextQuestion?.priority || 3,
-          isAnswered: true,
-          answerSummary: extractedData.profileText
-        },
-        update: {
-          isAnswered: true,
-          answerSummary: extractedData.profileText
-        }
-      });
+      dbOperations.push(
+        prisma.healthQuestionProgress.upsert({
+          where: { userId_questionId: { userId: user.id, questionId: extractedData.questionId } },
+          create: {
+            userId: user.id,
+            questionId: extractedData.questionId,
+            sectionId: extractedData.sectionId,
+            priority: nextQuestion?.priority || 3,
+            isAnswered: true,
+            answerSummary: extractedData.profileText
+          },
+          update: {
+            isAnswered: true,
+            answerSummary: extractedData.profileText
+          }
+        })
+      );
 
-      // 健康プロフィールを更新
+      // 健康プロフィールを更新（既存データ取得後に実行）
       const section = await prisma.healthProfileSection.findUnique({
         where: { userId_categoryId: { userId: user.id, categoryId: extractedData.sectionId } }
       });
@@ -387,52 +421,25 @@ export async function POST(req: NextRequest) {
         ? `${section.content}\n${extractedData.profileText}`
         : extractedData.profileText;
 
-      await prisma.healthProfileSection.upsert({
-        where: { userId_categoryId: { userId: user.id, categoryId: extractedData.sectionId } },
-        create: {
-          userId: user.id,
-          categoryId: extractedData.sectionId,
-          title: sectionTitle,
-          content: newContent,
-          orderIndex: DEFAULT_PROFILE_CATEGORIES.findIndex(c => c.id === extractedData.sectionId) + 1
-        },
-        update: {
-          content: newContent
-        }
-      });
+      dbOperations.push(
+        prisma.healthProfileSection.upsert({
+          where: { userId_categoryId: { userId: user.id, categoryId: extractedData.sectionId } },
+          create: {
+            userId: user.id,
+            categoryId: extractedData.sectionId,
+            title: sectionTitle,
+            content: newContent,
+            orderIndex: DEFAULT_PROFILE_CATEGORIES.findIndex(c => c.id === extractedData.sectionId) + 1
+          },
+          update: {
+            content: newContent
+          }
+        })
+      );
     }
 
-    // セッション状態を更新
-    const updatedAnsweredIds = extractedData
-      ? [...answeredIds, extractedData.questionId]
-      : answeredIds;
-    const newNextQuestion = getNextQuestion(updatedAnsweredIds, currentPriority);
-
-    // AIの応答に次の質問が含まれていない場合、追加する
-    let finalResponse = cleanResponse;
-    if (newNextQuestion && !cleanResponse.includes('？')) {
-      // 次の質問を追加
-      const sectionName = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === newNextQuestion.sectionId)?.title || '';
-      finalResponse = `${cleanResponse}\n\nそれでは次の質問です。\n\n${newNextQuestion.question}`;
-    }
-
-    // AIレスポンスを保存
-    await prisma.healthChatMessage.create({
-      data: {
-        sessionId: session.id,
-        role: 'assistant',
-        content: finalResponse,
-        questionId: newNextQuestion?.id
-      }
-    });
-
-    await prisma.healthChatSession.update({
-      where: { id: session.id },
-      data: {
-        currentQuestionId: newNextQuestion?.id || null,
-        currentSectionId: newNextQuestion?.sectionId || null
-      }
-    });
+    // 全DB操作を並列実行
+    await Promise.all(dbOperations);
 
     const progress = await calculateProgress(user.id);
 
