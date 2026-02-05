@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
 import { getExternalDataPreview, importExternalData } from '@/lib/external-data-importer';
+import { syncHealthProfileToGoogleDocs } from '@/lib/google-docs';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
@@ -322,17 +323,39 @@ export async function POST(req: NextRequest) {
 
     // 保存リクエストの処理
     if (isSaveRequest) {
+      // セッションを一時停止
       await prisma.healthChatSession.update({
         where: { id: session.id },
         data: { status: 'paused' }
       });
 
+      // メッセージを保存
       await prisma.healthChatMessage.createMany({
         data: [
           { sessionId: session.id, role: 'user', content: userMessage },
           { sessionId: session.id, role: 'assistant', content: 'ここまでの回答を保存しました。続きはいつでも再開できます。お疲れさまでした！' }
         ]
       });
+
+      // 健康プロフィールをGoogle Docsに同期（バックグラウンドで実行）
+      const allSections = await prisma.healthProfileSection.findMany({
+        where: { userId: user.id },
+        orderBy: { orderIndex: 'asc' }
+      });
+
+      if (allSections.length > 0) {
+        const sectionsForSync = allSections.map(s => ({
+          categoryId: s.categoryId,
+          title: s.title,
+          content: s.content,
+          orderIndex: s.orderIndex
+        }));
+
+        // バックグラウンドで同期（エラーは無視）
+        syncHealthProfileToGoogleDocs(sectionsForSync).catch(err => {
+          console.error('Google Docs sync failed during chat save:', err);
+        });
+      }
 
       const progress = await calculateProgress(user.id);
 
