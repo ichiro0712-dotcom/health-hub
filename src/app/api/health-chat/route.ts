@@ -18,7 +18,8 @@ function buildSystemPrompt(
   currentQuestion: typeof HEALTH_QUESTIONS[0] | null,
   existingContent: string,
   answeredCount: number,
-  totalPriority3: number
+  totalPriority3: number,
+  allSectionsContent?: Record<string, string>
 ): string {
   // 既存内容から不足を判定するための追加指示
   const existingContentAnalysis = existingContent
@@ -31,6 +32,18 @@ ${existingContent}
 - 既存情報が曖昧、不完全、または意味をなさない場合は、改めて質問してください
 - 質問の意図に沿った具体的な情報がない場合は質問してください`
     : '- このセクションにはまだ情報がありません';
+
+  // 全セクション情報（削除/置換時に参照）
+  const allSectionsInfo = allSectionsContent ? `
+## 全セクション情報（削除・修正時の参照用）
+${DEFAULT_PROFILE_CATEGORIES.map(cat => {
+  const content = allSectionsContent[cat.id];
+  return content ? `【${cat.title}（${cat.id}）】\n${content}` : `【${cat.title}（${cat.id}）】（未記入）`;
+}).join('\n\n')}
+` : '';
+
+  // セクションIDリスト
+  const sectionIdList = DEFAULT_PROFILE_CATEGORIES.map(cat => `${cat.id}（${cat.title}）`).join(', ');
 
   return `あなたは健康プロフィールのヒアリングを行うAIアシスタントです。
 
@@ -51,9 +64,13 @@ ${existingContent}
 7. **ユーザーが「削除して」「消して」「やめた」「なくなった」などと言った場合は、該当情報を削除する**
 8. **ユーザーが「変更して」「修正して」「実は○○」などと言った場合は、情報を更新する**
 
+## 利用可能なセクションID
+${sectionIdList}
+
 ## 現在の状態
 - 回答済み質問数: ${answeredCount}/${totalPriority3}（必須質問）
 ${existingContentAnalysis}
+${allSectionsInfo}
 
 ## 次の質問
 ${currentQuestion ? `
@@ -74,21 +91,26 @@ ${currentQuestion ? `
 <!--EXTRACTED_DATA
 {
   "questionId": "${currentQuestion?.id || ''}",
-  "sectionId": "${currentQuestion?.sectionId || ''}",
+  "sectionId": "【重要】削除・修正の場合は対象テキストが存在するセクションIDを指定（例: diet_nutrition, circadian等）。追加の場合は現在のセクション: ${currentQuestion?.sectionId || ''}",
   "action": "add" または "delete" または "replace",
   "extractedInfo": {
     "項目名": "値"
   },
   "profileText": "プロフィールに追記するテキスト（箇条書き形式）",
-  "deleteText": "削除すべきテキスト（action=deleteまたはreplaceの場合）",
+  "deleteText": "削除すべきテキスト（action=deleteまたはreplaceの場合）。全セクション情報を参照して正確なテキストを指定",
   "existingDataValid": true または false（既存データが有効かどうか）
 }
 EXTRACTED_DATA-->
 
 ## actionの説明
-- "add": 新しい情報を追記（デフォルト）
-- "delete": 既存情報を削除（ユーザーが「削除して」「消して」と言った場合）
-- "replace": 既存情報を置換（ユーザーが「変更して」「修正して」と言った場合）
+- "add": 新しい情報を追記（デフォルト）。sectionIdは現在の質問のセクション
+- "delete": 既存情報を削除（ユーザーが「削除して」「消して」と言った場合）。**sectionIdは削除対象のテキストが存在するセクションを指定**
+- "replace": 既存情報を置換（ユーザーが「変更して」「修正して」と言った場合）。**sectionIdは置換対象のテキストが存在するセクションを指定**
+
+【重要】削除・修正時のsectionId決定ルール:
+1. 全セクション情報を確認し、ユーザーが削除・修正を求めているテキストがどのセクションにあるか特定する
+2. そのテキストが存在するセクションのIDをsectionIdに指定する
+3. 現在質問中のセクションとは異なる場合もある（例：運動について質問中でも、食生活の情報を削除できる）
 
 deleteTextには、削除または置換対象のテキスト（部分一致で検索される）を指定してください。`;
 }
@@ -470,12 +492,29 @@ export async function POST(req: NextRequest) {
     const priority3Answered = priority3Questions.filter(q => answeredIds.includes(q.id));
     const allPriority3Complete = priority3Answered.length >= priority3Questions.length;
 
+    // 削除・修正リクエストの検出（異なるセクションの情報を操作する可能性があるため全セクション情報が必要）
+    const isModificationRequest = /削除|消して|やめた|なくなった|変更して|修正して|実は/.test(userMessage);
+
+    // 削除・修正リクエストの場合は全セクション情報を取得
+    let allSectionsContent: Record<string, string> | undefined;
+    if (isModificationRequest) {
+      const allSections = await prisma.healthProfileSection.findMany({
+        where: { userId: user.id },
+        orderBy: { orderIndex: 'asc' }
+      });
+      allSectionsContent = {};
+      for (const section of allSections) {
+        allSectionsContent[section.categoryId] = section.content;
+      }
+    }
+
     // システムプロンプトを生成
     const systemPrompt = buildSystemPrompt(
       nextQuestion,
       existingSection?.content || '',
       answeredIds.length,
-      priority3Questions.length
+      priority3Questions.length,
+      allSectionsContent
     );
 
     // AIからの応答を取得
