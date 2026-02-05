@@ -7,16 +7,30 @@
  * - 既存セッションがあれば即座に表示
  * - 新規の場合はウェルカムメッセージ表示中にバックグラウンドでGoogle Docs同期
  * - Google Docsには既に外部データ（健康診断等）も含まれているため、別途取り込みは不要
+ *
+ * 監査対応:
+ * - pendingActionsの確認/拒否処理
+ * - Google Docs同期エラーの通知
+ * - レート制限エラーの表示
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageCircle, Send, Loader2, X, RefreshCw, CloudOff, Cloud } from 'lucide-react';
+import { MessageCircle, Send, Loader2, X, RefreshCw, CloudOff, Cloud, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+}
+
+interface ProfileAction {
+  type: 'ADD' | 'UPDATE' | 'DELETE' | 'NONE';
+  section_id: string;
+  target_text?: string;
+  new_text?: string;
+  reason: string;
+  confidence: number;
 }
 
 interface SessionContext {
@@ -47,6 +61,8 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
   const [sessionStatus, setSessionStatus] = useState<string | null>(null);
   const [context, setContext] = useState<SessionContext | null>(null);
   const [hasUpdates, setHasUpdates] = useState(false);
+  const [pendingActions, setPendingActions] = useState<ProfileAction[]>([]);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -62,6 +78,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
   // バックグラウンドでGoogle Docsを同期
   const syncGoogleDocs = useCallback(async () => {
     setIsSyncing(true);
+    setSyncError(null);
     try {
       const res = await fetch('/api/health-chat/v2/session', { method: 'POST' });
       if (!res.ok) throw new Error('Sync failed');
@@ -70,6 +87,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
       return data.context;
     } catch (error) {
       console.error('Sync error:', error);
+      setSyncError('Google Docsとの同期に失敗しました');
       return null;
     } finally {
       setIsSyncing(false);
@@ -79,10 +97,9 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
   // チャット開始（楽観的UI）
   const startChat = async () => {
     setIsInitializing(true);
-    setIsOpen(true);  // 即座に開く
+    setIsOpen(true);
 
     try {
-      // まずセッション情報を高速取得（DBのみ）
       const res = await fetch('/api/health-chat/v2/session');
       if (!res.ok) throw new Error('Failed to start session');
 
@@ -91,7 +108,6 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
       setSessionStatus(data.status);
       setContext(data.context);
 
-      // 既存のメッセージがあれば表示
       if (data.messages && data.messages.length > 0) {
         const restoredMessages: Message[] = data.messages.map((m: { id: string; role: 'user' | 'assistant'; content: string }) => ({
           id: m.id || generateMessageId(),
@@ -100,7 +116,6 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         }));
         setMessages(restoredMessages);
       } else {
-        // 新規セッション: ウェルカムメッセージを表示
         setMessages([{
           id: generateMessageId(),
           role: 'assistant',
@@ -110,7 +125,6 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
 
       setIsInitializing(false);
 
-      // バックグラウンドでGoogle Docs同期
       if (!data.context.synced) {
         syncGoogleDocs();
       }
@@ -126,12 +140,11 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
   // 新規セッション開始（履歴クリア）
   const startNewSession = async () => {
     setIsInitializing(true);
+    setPendingActions([]);
 
     try {
-      // 既存セッションをクリア
       await fetch('/api/health-chat/v2/session', { method: 'DELETE' });
 
-      // 新規セッション開始
       const res = await fetch('/api/health-chat/v2/session');
       if (!res.ok) throw new Error('Failed to start new session');
 
@@ -145,8 +158,8 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         content: data.welcomeMessage
       }]);
       setHasUpdates(false);
+      setSyncError(null);
 
-      // バックグラウンドで同期
       syncGoogleDocs();
 
     } catch (error) {
@@ -167,50 +180,174 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
     }
   };
 
-  // メッセージ送信
-  const sendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
+  // メッセージ送信（ストリーミング対応）
+  const sendMessage = async (overrideMessage?: string) => {
+    const messageToSend = overrideMessage || inputValue.trim();
+    if (!messageToSend || isLoading) return;
 
-    const userMessage = inputValue.trim();
-    setInputValue('');
+    if (!overrideMessage) {
+      setInputValue('');
+    }
     const userMessageId = generateMessageId();
-    setMessages(prev => [...prev, { id: userMessageId, role: 'user', content: userMessage }]);
+    const assistantMessageId = generateMessageId();
+
+    setMessages(prev => [...prev, { id: userMessageId, role: 'user', content: messageToSend }]);
     setIsLoading(true);
 
+    // pendingActionsがある場合の確認/拒否は通常APIを使用
+    if (pendingActions.length > 0) {
+      try {
+        const res = await fetch('/api/health-chat/v2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: messageToSend,
+            sessionId,
+            pendingActionsToExecute: pendingActions
+          })
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          if (res.status === 429) {
+            toast.error('リクエストが多すぎます。少し待ってから再試行してください。');
+            setMessages(prev => prev.filter(m => m.id !== userMessageId));
+            if (!overrideMessage) setInputValue(messageToSend);
+            return;
+          }
+          throw new Error(errorData.message || 'Failed to send message');
+        }
+
+        const data = await res.json();
+        setPendingActions([]);
+        setMessages(prev => [...prev, {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: data.response
+        }]);
+        setSessionStatus(data.sessionStatus);
+
+        if (data.pendingActions && data.pendingActions.length > 0) {
+          setPendingActions(data.pendingActions);
+        }
+
+        if (data.executedActions && data.executedActions.length > 0) {
+          setHasUpdates(true);
+          onContentUpdated?.();
+        }
+
+        if (data.syncStatus === 'failed') {
+          setSyncError(data.syncError || 'Google Docsとの同期に失敗しました');
+        } else if (data.syncStatus === 'synced') {
+          setSyncError(null);
+        }
+
+        if (data.sessionStatus === 'paused') {
+          onContentUpdated?.();
+        }
+      } catch (error) {
+        console.error('Send message error:', error);
+        toast.error('メッセージの送信に失敗しました');
+        setMessages(prev => prev.filter(m => m.id !== userMessageId));
+        if (!overrideMessage) setInputValue(messageToSend);
+      } finally {
+        setIsLoading(false);
+        inputRef.current?.focus();
+      }
+      return;
+    }
+
+    // ストリーミングAPIを使用
     try {
-      const res = await fetch('/api/health-chat/v2', {
+      // 空のアシスタントメッセージを追加（ストリーミング用）
+      setMessages(prev => [...prev, { id: assistantMessageId, role: 'assistant', content: '' }]);
+
+      const res = await fetch('/api/health-chat/v2/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: userMessage,
+          message: messageToSend,
           sessionId
         })
       });
 
-      if (!res.ok) throw new Error('Failed to send message');
-
-      const data = await res.json();
-      setMessages(prev => [...prev, {
-        id: generateMessageId(),
-        role: 'assistant',
-        content: data.response
-      }]);
-      setSessionStatus(data.sessionStatus);
-
-      // アクションが実行された場合
-      if (data.executedActions && data.executedActions.length > 0) {
-        setHasUpdates(true);
-        onContentUpdated?.();
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        if (res.status === 429) {
+          toast.error('リクエストが多すぎます。少し待ってから再試行してください。');
+          setMessages(prev => prev.filter(m => m.id !== userMessageId && m.id !== assistantMessageId));
+          if (!overrideMessage) setInputValue(messageToSend);
+          return;
+        }
+        throw new Error(errorData.message || 'Failed to send message');
       }
 
-      if (data.sessionStatus === 'paused') {
-        onContentUpdated?.();
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let accumulatedText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.text) {
+                accumulatedText += data.text;
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === assistantMessageId
+                      ? { ...m, content: accumulatedText }
+                      : m
+                  )
+                );
+              }
+
+              if (data.done) {
+                setSessionId(data.sessionId);
+
+                if (data.pendingActions && data.pendingActions.length > 0) {
+                  setPendingActions(data.pendingActions);
+                }
+
+                if (data.executedActions && data.executedActions.length > 0) {
+                  setHasUpdates(true);
+                  onContentUpdated?.();
+                }
+
+                if (data.syncStatus === 'failed') {
+                  setSyncError('Google Docsとの同期に失敗しました');
+                  toast.error('Google Docsへの同期に失敗しました');
+                } else if (data.syncStatus === 'synced') {
+                  setSyncError(null);
+                }
+              }
+
+              if (data.error) {
+                toast.error(data.error);
+              }
+            } catch {
+              // JSONパースエラーは無視
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Send message error:', error);
       toast.error('メッセージの送信に失敗しました');
-      setMessages(prev => prev.filter(m => m.id !== userMessageId));
-      setInputValue(userMessage);
+      setMessages(prev => prev.filter(m => m.id !== userMessageId && m.id !== assistantMessageId));
+      if (!overrideMessage) setInputValue(messageToSend);
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();
@@ -321,8 +458,22 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         </div>
       </div>
 
+      {/* 同期エラーバー */}
+      {syncError && (
+        <div className="px-4 py-2 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-700 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+          <AlertTriangle className="w-3 h-3" />
+          {syncError}
+          <button
+            onClick={handleManualSync}
+            className="ml-auto text-red-700 dark:text-red-300 hover:underline font-medium"
+          >
+            再試行
+          </button>
+        </div>
+      )}
+
       {/* 同期状態バー（未同期の場合のみ表示） */}
-      {!context?.synced && !isSyncing && (
+      {!context?.synced && !isSyncing && !syncError && (
         <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
           <span>最新のGoogle Docsデータを読み込んでいません</span>
           <button
@@ -391,6 +542,27 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
         )}
       </div>
 
+      {/* 保留中のアクションがある場合のクイックアクションボタン */}
+      {pendingActions.length > 0 && !isLoading && (
+        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-t border-amber-200 dark:border-amber-700 flex items-center justify-center gap-3">
+          <span className="text-xs text-amber-700 dark:text-amber-300">
+            確認が必要な更新があります
+          </span>
+          <button
+            onClick={() => sendMessage('はい')}
+            className="px-3 py-1 text-xs bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors"
+          >
+            はい
+          </button>
+          <button
+            onClick={() => sendMessage('いいえ')}
+            className="px-3 py-1 text-xs bg-slate-400 text-white rounded-full hover:bg-slate-500 transition-colors"
+          >
+            いいえ
+          </button>
+        </div>
+      )}
+
       {/* 入力エリア */}
       <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
         <div className="flex items-end gap-2">
@@ -411,7 +583,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
             }}
           />
           <button
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={isLoading || !inputValue.trim() || sessionStatus === 'paused' || isInitializing}
             className="p-2 bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           >
