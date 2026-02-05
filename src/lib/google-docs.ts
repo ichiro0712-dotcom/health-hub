@@ -20,9 +20,9 @@ function sanitizeForGoogleDocs(text: string | null | undefined): string {
         .trim();
 }
 
-// Document IDs
-const RECORDS_DOC_ID = '1qCYtdo40Adk_-cG8vcwPkwlPW6NKHq97zeIX-EB0F3Y';
-const HEALTH_PROFILE_DOC_ID = '1sHZtZpcFE3Gv8IT8AZZftk3xnCCOUcVwfkC9NuzRanA';
+// Document IDs (エクスポート)
+export const RECORDS_DOC_ID = '1qCYtdo40Adk_-cG8vcwPkwlPW6NKHq97zeIX-EB0F3Y';
+export const HEALTH_PROFILE_DOC_ID = '1sHZtZpcFE3Gv8IT8AZZftk3xnCCOUcVwfkC9NuzRanA';
 
 // Initialize Google Docs API client
 function getDocsClient() {
@@ -522,6 +522,71 @@ export async function syncHealthProfileToGoogleDocs(
         return { success: true };
     } catch (error) {
         console.error('❌ Failed to sync health profile to Google Docs:', error);
+        return { success: false, error: String(error) };
+    }
+}
+
+// ============================================
+// Google Docsからの読み取り関数（AIチャット用）
+// ============================================
+
+/**
+ * Google Docsドキュメントからテキスト全文を読み取る
+ */
+async function readDocumentText(documentId: string): Promise<string> {
+    const docs = getDocsClient();
+    const doc = await docs.documents.get({ documentId });
+
+    let text = '';
+    const content = doc.data.body?.content || [];
+
+    for (const element of content) {
+        if (element.paragraph?.elements) {
+            for (const e of element.paragraph.elements) {
+                if (e.textRun?.content) {
+                    text += e.textRun.content;
+                }
+            }
+        }
+    }
+
+    return text.trim();
+}
+
+/**
+ * 健康プロフィールをGoogle Docsから読み取る
+ * AIチャットのコンテキストとして使用
+ */
+export async function readHealthProfileFromGoogleDocs(): Promise<{
+    success: boolean;
+    content?: string;
+    error?: string;
+}> {
+    try {
+        const content = await readDocumentText(HEALTH_PROFILE_DOC_ID);
+        console.log(`✅ Read health profile from Google Docs (${content.length} chars)`);
+        return { success: true, content };
+    } catch (error) {
+        console.error('❌ Failed to read health profile from Google Docs:', error);
+        return { success: false, error: String(error) };
+    }
+}
+
+/**
+ * 診断記録をGoogle Docsから読み取る
+ * AIチャットのコンテキストとして使用
+ */
+export async function readRecordsFromGoogleDocs(): Promise<{
+    success: boolean;
+    content?: string;
+    error?: string;
+}> {
+    try {
+        const content = await readDocumentText(RECORDS_DOC_ID);
+        console.log(`✅ Read records from Google Docs (${content.length} chars)`);
+        return { success: true, content };
+    } catch (error) {
+        console.error('❌ Failed to read records from Google Docs:', error);
         return { success: false, error: String(error) };
     }
 }

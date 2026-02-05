@@ -13,7 +13,7 @@ import {
     getHealthProfile,
 } from '@/app/actions/health-profile';
 import { DEFAULT_PROFILE_CATEGORIES, HealthProfileSectionData } from '@/constants/health-profile';
-import ChatHearing from '@/components/health-profile/ChatHearing';
+import ChatHearingV2 from '@/components/health-profile/ChatHearingV2';
 
 interface Props {
     initialSections: HealthProfileSectionData[];
@@ -262,8 +262,8 @@ export default function HealthProfileClient({ initialSections }: Props) {
 
             {/* メインコンテンツ */}
             <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
-                {/* チャットヒアリング */}
-                <ChatHearing
+                {/* チャットヒアリング（V2: Google Docs連携） */}
+                <ChatHearingV2
                     onContentUpdated={async () => {
                         // チャットで更新されたらセクションを再読み込み
                         const result = await getHealthProfile();
