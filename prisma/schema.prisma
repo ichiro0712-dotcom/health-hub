@@ -36,6 +36,10 @@ model User {
   habits             Habit[]
   habitRecords       HabitRecord[]
 
+  // Health Chat Hearing
+  healthChatSessions    HealthChatSession[]
+  healthQuestionProgress HealthQuestionProgress[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -438,4 +442,68 @@ model HabitRecord {
 
   @@unique([habitId, date])
   @@index([userId, date])
+}
+
+// =====================================================
+// Health Chat Hearing Models
+// =====================================================
+
+// チャットヒアリングセッション
+model HealthChatSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status      String   @default("active") // "active" | "completed" | "paused"
+
+  // 進捗状態
+  currentSectionId  String?  // 現在のセクションID
+  currentPriority   Int      @default(3) // 現在の重要度 (1, 2, 3)
+  currentQuestionId String?  // 現在の質問ID
+
+  messages    HealthChatMessage[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+// チャットメッセージ履歴
+model HealthChatMessage {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     HealthChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  role        String   // "user" | "assistant"
+  content     String   @db.Text
+
+  // メッセージに関連する質問（AIの質問の場合）
+  questionId  String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
+}
+
+// 質問への回答進捗
+model HealthQuestionProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  questionId  String   // 例: "1-1", "2-3"
+  sectionId   String   // 例: "basic_attributes"
+  priority    Int      // 1, 2, 3
+
+  isAnswered  Boolean  @default(false)
+  answerSummary String? @db.Text // AIが抽出した回答の要約
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, questionId])
+  @@index([userId])
+  @@index([userId, sectionId])
 }

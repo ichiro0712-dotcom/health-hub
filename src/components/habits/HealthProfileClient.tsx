@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
     Activity, Save, Plus, Copy, ChevronDown, ChevronUp, Trash2, Check, Loader2
 } from 'lucide-react';
@@ -10,8 +10,10 @@ import {
     saveAllHealthProfileSections,
     addCustomCategory,
     deleteCategory,
+    getHealthProfile,
 } from '@/app/actions/health-profile';
 import { DEFAULT_PROFILE_CATEGORIES, HealthProfileSectionData } from '@/constants/health-profile';
+import ChatHearing from '@/components/health-profile/ChatHearing';
 
 interface Props {
     initialSections: HealthProfileSectionData[];
@@ -260,6 +262,17 @@ export default function HealthProfileClient({ initialSections }: Props) {
 
             {/* メインコンテンツ */}
             <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
+                {/* チャットヒアリング */}
+                <ChatHearing
+                    onContentUpdated={async () => {
+                        // チャットで更新されたらセクションを再読み込み
+                        const result = await getHealthProfile();
+                        if (result.data) {
+                            setSections(result.data);
+                        }
+                    }}
+                />
+
                 <div className="space-y-3">
                     {sections.map((section) => {
                         const isExpanded = expandedSections.has(section.categoryId);
