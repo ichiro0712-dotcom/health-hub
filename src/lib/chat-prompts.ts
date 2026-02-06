@@ -225,10 +225,19 @@ ${guidance}
 
 ## ★最重要ルール: 既存情報は絶対に再質問しない
 
-**プロフィールに既に記載されている情報は、どんな場合でも再度質問しないでください。**
-例えば、プロフィールに「1978年7月12日生まれ」とあれば、生年月日や年齢の質問はスキップし、次の未回答の質問に進んでください。
+**質問する前に、必ず上記「現在の健康プロフィール」を読んで、その情報が既に含まれていないか確認してください。**
 
-各質問の「抽出ヒント」に含まれるキーワードがプロフィールに既にあるかを確認してから質問を決めてください。
+判定方法:
+1. **プロフィール全文を注意深く読む**: キーワード一致ではなく、**意味的に同じ情報があるか**を判断する
+2. **自然言語で書かれた情報も認識する**: 例えば「タバコは吸いません」は喫煙歴の質問への回答である。「朝はパンを食べます」は朝食メニューの質問への回答である
+3. **部分的に情報がある場合**: 追加で聞くべき情報がある場合のみ、不足部分だけを聞く。既知の部分を再確認しない
+4. **少しでも関連情報があればスキップ**: 完璧な回答でなくても、関連する記述があればその質問は回答済みとして扱う
+
+例:
+- プロフィールに「タバコは吸いません」→ 喫煙歴の質問(7-4)はスキップ
+- プロフィールに「朝はパン、昼は外食が多い、夜は自炊」→ 食事メニューの質問(6-2)はスキップ
+- プロフィールに「身長170cm、体重65kg」→ 身長体重の質問(1-2)はスキップ（20代比較が不明でも基本はスキップ）
+- プロフィールに「睡眠は23時〜7時」→ 睡眠時間の質問(5-1)はスキップ
 
 ## ★重要ルール: ユーザーが始めたいと言ったら即座に質問開始
 
@@ -239,7 +248,7 @@ ${nextQuestion ? `**今すぐ聞くべき次の質問**: ${nextQuestion.question
 
 ## その他のルール
 
-1. **質問リストを厳密に使う**: 上記のヒアリングガイドの「⬜未回答」質問のみを聞く。「✅回答済み」はスキップ
+1. **質問リストを厳密に使う**: ヒアリングガイドの質問を使うが、**プロフィールを読んで既に情報がある質問は自分の判断でスキップ**する。「⚠️プロフィール確認必須」マークがある質問は特に注意
 2. **1度に1つの質問**: ユーザーが圧倒されないよう、1回のメッセージで質問は1つだけ
 3. **確認が必要な場合**: confidence < 0.8 の更新は実行前に確認を求める
 4. **削除は慎重に**: confidence 0.95以上でないと自動実行しない
@@ -272,24 +281,100 @@ PROFILE_ACTION-->
 ## 会話の進め方
 
 - ユーザーが「保存して」「終わり」と言ったらセッション終了を提案
-- 上記の次の質問から順番に1つずつ進める
+- **質問を選ぶ前に必ずプロフィール全文を確認し、既知の情報に関する質問をスキップ**
+- 上記の次の質問から順番に1つずつ進める（プロフィールで回答済みなら次へ）
 - 1つの質問に対するユーザーの回答を受け取ったら、PROFILE_ACTIONで情報を保存し、次の未回答質問へ進む`;
 }
 
 // --- 質問ガイダンス（プロフィール構築モード用） ---
-// extractionHintsを使って質問単位で回答済みかを精密判定
+// セクション単位でコンテンツの有無を判定（詳細な判定はAIに委ねる）
 
-function isQuestionAnsweredByProfile(q: typeof HEALTH_QUESTIONS[number], profileContent: string): boolean {
-    if (!profileContent || profileContent.length < 10) return false;
-    const profileLower = profileContent.toLowerCase();
+/**
+ * プロフィール内容をセクション別にパースする。
+ * Google Docs形式: 【セクション名】\n\n内容\n\n
+ * DB形式: セクション内容がそのまま入っている場合もある
+ */
+function parseProfileSections(profileContent: string): Map<string, string> {
+    const sections = new Map<string, string>();
+    if (!profileContent || profileContent.length < 10) return sections;
 
-    // extractionHintsのうち、1つでもプロフィール内に含まれていれば「回答済み」とみなす
-    const matchCount = q.extractionHints.filter(hint =>
-        profileLower.includes(hint.toLowerCase())
-    ).length;
+    // 【セクション名】で分割（Google Docs形式）
+    const sectionRegex = /【([^】]+)】/g;
+    let match;
+    const positions: { title: string; start: number; end: number }[] = [];
 
-    // ヒントの半分以上がマッチすれば回答済みと判定
-    return matchCount >= Math.max(1, Math.ceil(q.extractionHints.length * 0.4));
+    while ((match = sectionRegex.exec(profileContent)) !== null) {
+        positions.push({
+            title: match[1],
+            start: match.index + match[0].length,
+            end: profileContent.length // 仮
+        });
+    }
+
+    // 各セクションの終了位置を次のセクション開始位置に修正
+    for (let i = 0; i < positions.length; i++) {
+        if (i + 1 < positions.length) {
+            positions[i].end = positions[i + 1].start - positions[i + 1].title.length - 2; // 【】の分
+        }
+    }
+
+    for (const pos of positions) {
+        const content = profileContent.substring(pos.start, pos.end).trim();
+        if (content.length > 0) {
+            sections.set(pos.title, content);
+        }
+    }
+
+    return sections;
+}
+
+/**
+ * セクションタイトルからセクションIDへのマッピング
+ * （プロフィールのセクション名は番号付きの場合がある: "1. 基本属性・バイオメトリクス" 等）
+ */
+const SECTION_TITLE_TO_ID: Record<string, string> = {};
+// 初期化: DEFAULT_PROFILE_CATEGORIESから動的にマッピング生成
+for (const cat of DEFAULT_PROFILE_CATEGORIES) {
+    // 番号プレフィックスを除去してマッピング
+    const cleanTitle = cat.title.replace(/^\d+\.\s*/, '');
+    SECTION_TITLE_TO_ID[cleanTitle] = cat.id;
+    SECTION_TITLE_TO_ID[cat.title] = cat.id;
+}
+
+/**
+ * セクション単位でコンテンツがあるかを判定。
+ * キーワードマッチは使わず、セクションに実質的な内容があるかだけを見る。
+ * 詳細な「この質問は回答済みか」の判定はAIに委ねる。
+ */
+function getSectionsWithContent(profileContent: string): Set<string> {
+    const sectionsWithContent = new Set<string>();
+    if (!profileContent || profileContent.length < 10) return sectionsWithContent;
+
+    const parsed = parseProfileSections(profileContent);
+
+    for (const [title, content] of parsed) {
+        // タイトルからセクションIDを特定
+        const sectionId = SECTION_TITLE_TO_ID[title];
+        if (sectionId && content.length > 5) {
+            sectionsWithContent.add(sectionId);
+        }
+    }
+
+    // DB直接読み込みの場合はセクション単位でないかもしれない
+    // その場合はセクションIDでのフォールバックも試す
+    for (const cat of DEFAULT_PROFILE_CATEGORIES) {
+        const cleanTitle = cat.title.replace(/^\d+\.\s*/, '');
+        if (profileContent.includes(`【${cleanTitle}】`) || profileContent.includes(`【${cat.title}】`)) {
+            // ヘッダーの後にコンテンツがあるか簡易確認
+            const regex = new RegExp(`【[^】]*${cleanTitle.substring(0, 4)}[^】]*】\\s*([\\s\\S]*?)(?=【|$)`);
+            const m = profileContent.match(regex);
+            if (m && m[1] && m[1].trim().length > 5) {
+                sectionsWithContent.add(cat.id);
+            }
+        }
+    }
+
+    return sectionsWithContent;
 }
 
 function buildQuestionGuidance(
@@ -299,14 +384,18 @@ function buildQuestionGuidance(
     currentPriority: number
 ): { guidance: string; nextQuestion: typeof HEALTH_QUESTIONS[number] | null } {
     const answeredSet = new Set(answeredQuestionIds);
+    const sectionsWithContent = getSectionsWithContent(profileContent);
 
-    // 各質問の回答状態を判定（DB記録 OR プロフィール内容から推定）
+    // 各質問の回答状態を判定
+    // DB記録（確定）またはセクションにコンテンツあり（AI判定に委ねる可能性あり）
     const questionStatus = HEALTH_QUESTIONS.map(q => {
         const dbAnswered = answeredSet.has(q.id);
-        const profileAnswered = isQuestionAnsweredByProfile(q, profileContent);
+        // セクションにコンテンツがある場合は「おそらく回答済み」フラグ
+        const sectionHasContent = sectionsWithContent.has(q.sectionId);
         return {
             question: q,
-            isAnswered: dbAnswered || profileAnswered,
+            isAnswered: dbAnswered,  // DB確定のみ
+            sectionHasContent,       // セクションにコンテンツあり（AI判定用）
         };
     });
 
@@ -317,6 +406,7 @@ function buildQuestionGuidance(
         'mental', 'beauty_hygiene', 'environment'
     ];
 
+    // DB未回答の質問（セクションにコンテンツがある場合もAIに判断させるため含む）
     const unansweredByPriority = (priority: number) =>
         questionStatus
             .filter(qs => !qs.isAnswered && qs.question.priority === priority)
@@ -329,10 +419,10 @@ function buildQuestionGuidance(
 
     const unanswered3 = unansweredByPriority(3);
     const unanswered2 = unansweredByPriority(2);
-    const answered3 = questionStatus.filter(qs => qs.isAnswered && qs.question.priority === 3);
-    const answered2 = questionStatus.filter(qs => qs.isAnswered && qs.question.priority === 2);
+    const dbAnswered3 = questionStatus.filter(qs => qs.isAnswered && qs.question.priority === 3);
+    const dbAnswered2 = questionStatus.filter(qs => qs.isAnswered && qs.question.priority === 2);
 
-    // 次の質問を決定
+    // 次の質問を決定（セクションにコンテンツがない質問を優先）
     let nextQuestion: typeof HEALTH_QUESTIONS[number] | null = null;
 
     // currentQuestionIdが指定されていて未回答ならそれを優先
@@ -343,49 +433,76 @@ function buildQuestionGuidance(
         }
     }
 
-    // なければ、現在のpriorityの未回答から
+    // なければ、セクションにコンテンツがない質問を優先（確実に未回答）
     if (!nextQuestion) {
         const currentUnanswered = currentPriority === 3 ? unanswered3 :
             currentPriority === 2 ? unanswered2 : unansweredByPriority(1);
-        if (currentUnanswered.length > 0) {
+
+        // まずセクションにコンテンツがない質問を探す
+        const noContentQuestions = currentUnanswered.filter(qs => !qs.sectionHasContent);
+        if (noContentQuestions.length > 0) {
+            nextQuestion = noContentQuestions[0].question;
+        } else if (currentUnanswered.length > 0) {
+            // セクションにコンテンツはあるがDB未記録の質問（AIに判断させる）
             nextQuestion = currentUnanswered[0].question;
         } else if (unanswered3.length > 0) {
-            nextQuestion = unanswered3[0].question;
+            const noContent3 = unanswered3.filter(qs => !qs.sectionHasContent);
+            nextQuestion = noContent3.length > 0 ? noContent3[0].question : unanswered3[0].question;
         } else if (unanswered2.length > 0) {
-            nextQuestion = unanswered2[0].question;
+            const noContent2 = unanswered2.filter(qs => !qs.sectionHasContent);
+            nextQuestion = noContent2.length > 0 ? noContent2[0].question : unanswered2[0].question;
         }
     }
 
     // ガイダンステキスト生成
     let guidance = `\n## ヒアリングガイド（質問リスト + 回答状態）\n\n`;
-    guidance += `進捗: 優先度3は ${answered3.length}/${answered3.length + unanswered3.length} 回答済み、`;
-    guidance += `優先度2は ${answered2.length}/${answered2.length + unanswered2.length} 回答済み\n\n`;
+    guidance += `進捗: DB記録で 優先度3は ${dbAnswered3.length}/${dbAnswered3.length + unanswered3.length} 回答済み、`;
+    guidance += `優先度2は ${dbAnswered2.length}/${dbAnswered2.length + unanswered2.length} 回答済み\n`;
+    guidance += `プロフィールにコンテンツがあるセクション: ${sectionsWithContent.size > 0 ? Array.from(sectionsWithContent).join(', ') : 'なし'}\n\n`;
+
+    // セクション別の既存プロフィール内容を表示（AIが判断できるように）
+    if (sectionsWithContent.size > 0) {
+        guidance += `### ⚠️ 重要: 既存プロフィールの要約（この情報に関する質問はスキップせよ）\n\n`;
+        guidance += `以下のセクションには既にユーザーが入力した情報があります。**この内容で既にカバーされている質問は絶対に聞かないでください。**\n`;
+        guidance += `プロフィール全文は「現在の健康プロフィール」セクションに記載されています。必ずそちらを確認してから質問を選んでください。\n\n`;
+
+        for (const sectionId of sectionsWithContent) {
+            const cat = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === sectionId);
+            if (cat) {
+                guidance += `- **${cat.title}**: ✅ 情報あり\n`;
+            }
+        }
+        guidance += `\n`;
+    }
 
     if (unanswered3.length > 0) {
-        guidance += `### 優先度3（最重要）- 未回答の質問\n`;
+        guidance += `### 優先度3（最重要）- DB未記録の質問\n`;
+        guidance += `以下の質問はDBに回答記録がありません。ただし、プロフィールに既に情報がある場合はスキップしてください。\n\n`;
         for (const qs of unanswered3.slice(0, 20)) {
             const q = qs.question;
             const sectionName = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === q.sectionId)?.title || q.sectionId;
             const marker = nextQuestion?.id === q.id ? '👉' : '⬜';
-            guidance += `${marker} **[${sectionName}]** ${q.question}（ID: ${q.id}）\n  → 抽出ヒント: ${q.extractionHints.join('、')}\n`;
+            const contentWarning = qs.sectionHasContent ? ' ⚠️プロフィール確認必須' : '';
+            guidance += `${marker} **[${sectionName}]** ${q.question}（ID: ${q.id}）${contentWarning}\n`;
         }
     } else {
-        guidance += `### ✅ 優先度3の質問はすべて回答済みです！\n`;
+        guidance += `### ✅ 優先度3の質問はすべてDB記録済みです！\n`;
     }
 
     if (unanswered3.length === 0 && unanswered2.length > 0) {
-        guidance += `\n### 優先度2（詳細情報）- 未回答の質問\n`;
+        guidance += `\n### 優先度2（詳細情報）- DB未記録の質問\n`;
         for (const qs of unanswered2.slice(0, 15)) {
             const q = qs.question;
             const marker = nextQuestion?.id === q.id ? '👉' : '⬜';
-            guidance += `${marker} [${q.sectionId}] ${q.question}（ID: ${q.id}）\n`;
+            const contentWarning = qs.sectionHasContent ? ' ⚠️プロフィール確認必須' : '';
+            guidance += `${marker} [${q.sectionId}] ${q.question}（ID: ${q.id}）${contentWarning}\n`;
         }
     }
 
-    // 回答済み質問の一覧（AI確認用、コンパクト）
-    if (answered3.length > 0) {
-        guidance += `\n### 回答済み（スキップすること）\n`;
-        guidance += answered3.map(qs => `✅ ${qs.question.id}: ${qs.question.extractionHints.slice(0, 2).join('、')}`).join('\n') + '\n';
+    // DB記録済み質問の一覧（AI確認用、コンパクト）
+    if (dbAnswered3.length > 0) {
+        guidance += `\n### DB記録済み（確実にスキップ）\n`;
+        guidance += dbAnswered3.map(qs => `✅ ${qs.question.id}: ${qs.question.question.slice(0, 30)}`).join('\n') + '\n';
     }
 
     return { guidance, nextQuestion };
