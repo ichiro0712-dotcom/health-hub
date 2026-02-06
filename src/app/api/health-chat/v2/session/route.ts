@@ -211,6 +211,7 @@ export async function GET(req: NextRequest) {
             success: true,
             sessionId: session.id,
             status: session.status,
+            mode: session.mode || null,
             welcomeMessage,
             messages: session.messages.map(m => ({
                 id: m.id,

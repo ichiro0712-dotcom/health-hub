@@ -456,6 +456,7 @@ model HealthChatSession {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   status      String   @default("active") // "active" | "completed" | "paused"
+  mode        String?  // "profile_building" | "data_analysis" | "help" | null
 
   // 進捗状態
   currentSectionId  String?  // 現在のセクションID

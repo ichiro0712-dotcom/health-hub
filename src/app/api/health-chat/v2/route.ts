@@ -5,15 +5,7 @@
  * - チャット開始時にGoogle Docsから全プロフィールを読み込み
  * - AIが全コンテキストを把握した上で対話
  * - 重複検出・解決をAIが自律的に実行
- *
- * 監査対応済み:
- * - pendingActionsの「はい」実行ロジック
- * - confidence閾値統一（0.8）
- * - 医療免責事項
- * - レート制限
- * - プロンプトインジェクション対策
- * - エラーコード体系
- * - 会話履歴のサマリー化
+ * - モード別システムプロンプト対応
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,6 +17,20 @@ import {
     readRecordsFromGoogleDocs,
     syncHealthProfileToGoogleDocs
 } from '@/lib/google-docs';
+import {
+    type ChatMode,
+    type ProfileAction,
+    type DetectedIssue,
+    detectMode,
+    detectModeSwitch,
+    stripModeSwitch,
+    buildSystemPrompt,
+    sanitizeUserInput,
+    summarizeHistory,
+    executeProfileAction,
+    CONFIDENCE_THRESHOLD_DEFAULT,
+    CONFIDENCE_THRESHOLD_DELETE,
+} from '@/lib/chat-prompts';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
@@ -49,8 +55,8 @@ const ERROR_CODES = {
 // ============================================
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_MAX = 20;  // 1分間の最大リクエスト数
-const RATE_LIMIT_WINDOW = 60 * 1000;  // 1分
+const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_WINDOW = 60 * 1000;
 
 function checkRateLimit(userId: string): boolean {
     const now = Date.now();
@@ -70,276 +76,14 @@ function checkRateLimit(userId: string): boolean {
 }
 
 // ============================================
-// プロンプトインジェクション対策
+// 型定義（route.ts固有）
 // ============================================
-
-function sanitizeUserInput(input: string): string {
-    // 危険なパターンを除去
-    return input
-        .replace(/<!--[\s\S]*?-->/g, '')  // HTMLコメント
-        .replace(/PROFILE_ACTION/gi, '')   // 特殊マーカー
-        .replace(/EXTRACTED_DATA/gi, '')   // 特殊マーカー
-        .replace(/システムプロンプト/gi, '')  // システムプロンプトへの言及
-        .replace(/system\s*prompt/gi, '')
-        .replace(/ignore\s*(all|previous)\s*(instructions?)?/gi, '')  // インジェクション試行
-        .trim();
-}
-
-// ============================================
-// 型定義
-// ============================================
-
-interface ProfileAction {
-    type: 'ADD' | 'UPDATE' | 'DELETE' | 'NONE';
-    section_id: string;
-    target_text?: string;
-    new_text?: string;
-    reason: string;
-    confidence: number;
-}
-
-interface DetectedIssue {
-    type: 'DUPLICATE' | 'CONFLICT' | 'OUTDATED' | 'MISSING';
-    description: string;
-    suggested_resolution: string;
-}
 
 interface ParsedAIResponse {
     responseText: string;
     actions: ProfileAction[];
     detectedIssues: DetectedIssue[];
     followUpTopic?: string;
-}
-
-// ============================================
-// 定数
-// ============================================
-
-// 信頼度閾値（プロンプトと統一: 0.8）
-const CONFIDENCE_THRESHOLD_DEFAULT = 0.8;
-const CONFIDENCE_THRESHOLD_DELETE = 0.95;
-
-// 会話履歴の最大件数（それ以上はサマリー化）
-const MAX_HISTORY_MESSAGES = 20;
-
-// (医療免責事項はGemini自体のポリシーに委任)
-
-// ============================================
-// 会話履歴のサマリー化
-// ============================================
-
-function summarizeHistory(messages: { role: string; content: string }[]): { role: string; content: string }[] {
-    if (messages.length <= MAX_HISTORY_MESSAGES) {
-        return messages;
-    }
-
-    // 古いメッセージをサマリー化
-    const oldMessages = messages.slice(0, messages.length - MAX_HISTORY_MESSAGES);
-    const recentMessages = messages.slice(messages.length - MAX_HISTORY_MESSAGES);
-
-    // サマリーを作成（簡易版）
-    const topics = new Set<string>();
-    for (const msg of oldMessages) {
-        // キーワード抽出（簡易）
-        const keywords = msg.content.match(/(?:について|に関して|の話|を記録|を追加|を削除)/g);
-        if (keywords) {
-            topics.add(msg.content.slice(0, 50));
-        }
-    }
-
-    const summaryText = topics.size > 0
-        ? `【これまでの会話サマリー】\n過去の会話で以下のトピックについて話しました: ${Array.from(topics).slice(0, 5).join('、')}...\n\n`
-        : '';
-
-    if (summaryText) {
-        return [
-            { role: 'user', content: summaryText },
-            ...recentMessages
-        ];
-    }
-
-    return recentMessages;
-}
-
-// ============================================
-// システムプロンプト生成
-// ============================================
-
-function buildSystemPromptV2(
-    profileContent: string,
-    recordsContent: string
-): string {
-    const sectionIdList = DEFAULT_PROFILE_CATEGORIES
-        .map(cat => `${cat.id}（${cat.title}）`)
-        .join('\n  ');
-
-    return `あなたはHealth Hubの健康プロフィール構築・改善・分析を支援するAIアシスタントです。
-
-## あなたが持っている情報
-
-### 現在の健康プロフィール（Google Docsから読み込み）
-${profileContent || '（まだ情報がありません）'}
-
-### 診断記録データ（Google Docsから読み込み）
-${recordsContent ? `${recordsContent.substring(0, 8000)}${recordsContent.length > 8000 ? '\n...(以下省略)' : ''}` : '（まだ記録がありません）'}
-
-## あなたの役割
-
-1. **ユーザーの意図を理解する**
-   - 情報を追加したい
-   - 情報を修正・削除したい
-   - 健康データについて質問・相談したい
-   - プロフィールを充実させたい
-   - Health Hubの使い方を知りたい
-
-2. **プロフィールの改善**
-   - ユーザーが話した内容から健康情報を抽出
-   - 既存情報と照らし合わせて重複・矛盾を検出
-   - 適切なセクションに情報を整理
-
-3. **健康データの分析・アドバイス**
-   - 上記のプロフィールや診断記録データを読み取り、傾向や気になる点を指摘する
-   - ユーザーの質問に対して、記録されたデータに基づいた生活改善のアドバイスを提供する
-   - 数値の経年変化や基準値との比較など、データに基づいた分析を行う
-
-4. **Health Hubの使い方サポート**
-   - アプリの機能や使い方について質問されたら、下記のFAQ情報をもとに回答する
-
-5. **自然な対話**
-   - 固定の質問リストに縛られない
-   - ユーザーの話の流れに沿って深掘り
-   - 適切なタイミングで関連質問
-   - プロフィールに既に書いてあることは質問しない
-
-## ウェルカムメッセージの番号選択への対応
-
-チャット開始時にユーザーへ番号付きの選択肢を表示しています。ユーザーが数字（半角「1」、全角「１」）や番号に対応する言葉で回答した場合、該当するトピックとして解釈して応答してください。
-- 「１」「1」「プロフィール」→ 健康プロフィールの作成・更新の対話を開始
-- 「２」「2」「分析」「アドバイス」→ 健康データの分析・アドバイスを開始
-- 「３」「3」「使い方」「ヘルプ」→ Health Hubの使い方を説明
-- その他の番号 → ウェルカムメッセージで表示した順に対応するトピックを開始
-- 「前回の続き」「１」（再開時）→ 直前の会話の文脈を引き継いで会話を続ける
-
-## 設定ページへの誘導
-
-連携や設定に関する質問には、チャット内で設定を完結させず、該当する設定ページへ誘導してください：
-- Fitbit連携 → 「Fitbitの連携は設定画面から行えます。こちらをご確認ください → /settings/fitbit」
-- Google Docs連携 → 「Google Docsの連携設定はこちら → /settings/google-docs」
-- スマホデータ連携 → 「スマートフォンとの連携設定はこちら → /settings/data-sync」
-- 検査項目の設定 → 「検査項目の設定はこちら → /profile/settings/items」
-- ヘルプ・FAQ → 「詳しくはヘルプページをご覧ください → /help」
-
-## Health Hub FAQ情報
-
-以下はHealth Hubの主な機能です。使い方について質問されたらこの情報をもとに回答してください。
-
-### 主な機能
-- **健康プロフィール** (/health-profile): AIチャットで対話しながら健康情報を整理。11のカテゴリ（基本属性、遺伝・家族歴、病歴、生理機能、生活リズム、食生活、嗜好品・薬、運動、メンタル、美容、環境）で管理
-- **診断記録** (/records): 健康診断の結果を管理。写真のアップロード、AI自動読み取り（OCR）、手入力に対応
-- **データ推移** (/trends): 検査値やスマホデータの推移をグラフ・表で可視化。経年変化の確認に便利
-- **習慣トラッキング** (/habits): 日々の生活習慣やサプリメントの記録
-- **動画** (/videos): 健康に関する動画コンテンツ
-- **提携クリニック** (/clinics): 提携クリニック情報
-- **オンライン処方** (/prescription): オンライン処方サービス
-
-### データ連携
-- **Fitbit連携** (/settings/fitbit): OAuth認証で心拍数、睡眠、HRV、歩数などを自動同期
-- **Android Health Connect**: スマホのHealth Connectアプリ経由でGarmin、Samsung等のデータも同期可能
-- **Google Docs連携** (/settings/google-docs): 健康データをGoogle Docsに自動エクスポート。ChatGPTやGeminiなど外部AIとのデータ共有に利用可能
-
-### データの入力方法
-- **AI自動入力**: 健康診断結果の写真をアップロード → AIが自動で読み取り
-- **手入力**: 検査値を直接入力
-- **デバイス連携**: Fitbit・Health Connectからの自動取り込み
-
-## 利用可能なセクションID
-  ${sectionIdList}
-
-## 重要なルール
-
-1. **既存情報の尊重**: プロフィールに既に書いてあることは再度質問しない
-2. **重複検出**: 同じ情報が複数回記載されていたら検出して報告
-3. **矛盾検出**: 診断記録とプロフィールの矛盾を発見したら確認
-4. **確認が必要な場合**: confidence < 0.8 の更新は実行前に確認を求める
-5. **削除・大幅修正は慎重に**: confidence 0.95以上でないと自動実行しない
-
-## 出力形式
-
-必ず以下の形式で出力してください:
-
-1. ユーザーへの応答テキスト（自然な日本語）
-2. プロフィール更新アクション（JSON形式）
-
-応答テキストの後に、以下の形式でJSONを出力:
-
-<!--PROFILE_ACTION
-{
-  "actions": [
-    {
-      "type": "ADD" | "UPDATE" | "DELETE" | "NONE",
-      "section_id": "セクションID（例: basic_attributes, diet_nutrition）",
-      "target_text": "更新/削除対象のテキスト（部分一致で検索）",
-      "new_text": "追加/更新後のテキスト（箇条書き推奨）",
-      "reason": "変更理由",
-      "confidence": 0.0-1.0
-    }
-  ],
-  "detected_issues": [
-    {
-      "type": "DUPLICATE" | "CONFLICT" | "OUTDATED" | "MISSING",
-      "description": "問題の説明",
-      "suggested_resolution": "解決案"
-    }
-  ],
-  "follow_up_topic": "次に聞くと良いトピック（任意）"
-}
-PROFILE_ACTION-->
-
-## 例
-
-ユーザー: 「最近朝食を抜くようになった」
-
-応答例:
-「なるほど、朝食を抜くようになったんですね。プロフィールを更新しておきます。
-
-ちなみに、朝食を抜くようになった理由はありますか？（時間がない、食欲がない、ダイエット目的など）」
-
-<!--PROFILE_ACTION
-{
-  "actions": [
-    {
-      "type": "ADD",
-      "section_id": "diet_nutrition",
-      "new_text": "・朝食を抜くことが多い",
-      "reason": "ユーザーが朝食を抜くようになったと発言",
-      "confidence": 0.9
-    }
-  ],
-  "detected_issues": [],
-  "follow_up_topic": "朝食を抜く理由"
-}
-PROFILE_ACTION-->
-
-## 会話の進め方
-
-- 最初はユーザーの話を聞く姿勢で
-- プロフィールが空の場合は基本情報から聞く
-- プロフィールがある程度埋まっている場合は不足部分を自然に質問
-- ユーザーが「保存して」「終わり」と言ったらセッション終了を提案
-
-## 重要: 必ず次の質問をすること
-
-**あなたの応答には必ず質問を1つ含めてください**（ユーザーが終了を希望した場合を除く）。
-
-ユーザーが健康情報を話したら：
-1. まず共感・理解を示す（1文）
-2. 情報を記録したことを伝える（任意、簡潔に）
-3. **必ず関連する深掘り質問または次のトピックへの質問をする**
-
-質問のパターン：
-- **深掘り質問**: 「その症状はいつ頃から？」「頻度は？」「きっかけは？」
-- **関連質問**: 「他に気になる症状はありますか？」
-- **新トピック質問**: 「睡眠についてはいかがですか？」`;
 }
 
 // ============================================
@@ -398,6 +142,9 @@ function parseAIResponse(response: string): ParsedAIResponse {
         .replace(/```[\s\S]*?```/g, '')
         .trim();
 
+    // MODE_SWITCHマーカーも除去
+    responseText = stripModeSwitch(responseText);
+
     let actions: ProfileAction[] = [];
     let detectedIssues: DetectedIssue[] = [];
     let followUpTopic: string | undefined;
@@ -414,76 +161,6 @@ function parseAIResponse(response: string): ParsedAIResponse {
     }
 
     return { responseText, actions, detectedIssues, followUpTopic };
-}
-
-// ============================================
-// プロフィールアクションの実行
-// ============================================
-
-async function executeProfileAction(
-    userId: string,
-    action: ProfileAction
-): Promise<{ success: boolean; error?: string }> {
-    if (action.type === 'NONE') {
-        return { success: true };
-    }
-
-    const sectionId = action.section_id;
-    const sectionMeta = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === sectionId);
-    if (!sectionMeta) {
-        return { success: false, error: `Unknown section: ${sectionId}` };
-    }
-
-    const existingSection = await prisma.healthProfileSection.findUnique({
-        where: { userId_categoryId: { userId, categoryId: sectionId } }
-    });
-
-    let newContent = existingSection?.content || '';
-
-    switch (action.type) {
-        case 'ADD':
-            if (action.new_text) {
-                newContent = newContent
-                    ? `${newContent}\n${action.new_text}`
-                    : action.new_text;
-            }
-            break;
-
-        case 'UPDATE':
-            if (action.target_text && action.new_text) {
-                const lines = newContent.split('\n');
-                const updatedLines = lines.map(line =>
-                    line.includes(action.target_text!) ? action.new_text! : line
-                );
-                newContent = updatedLines.join('\n');
-            }
-            break;
-
-        case 'DELETE':
-            if (action.target_text) {
-                const lines = newContent.split('\n');
-                const filteredLines = lines.filter(line =>
-                    !line.includes(action.target_text!)
-                );
-                newContent = filteredLines.join('\n').trim();
-            }
-            break;
-    }
-
-    await prisma.healthProfileSection.upsert({
-        where: { userId_categoryId: { userId, categoryId: sectionId } },
-        create: {
-            userId,
-            categoryId: sectionId,
-            title: sectionMeta.title,
-            content: newContent,
-            orderIndex: sectionMeta.order
-        },
-        update: { content: newContent }
-    });
-
-    console.log(`✅ Profile action executed: ${action.type} on ${sectionId}`);
-    return { success: true };
 }
 
 // ============================================
@@ -672,6 +349,7 @@ export async function POST(req: NextRequest) {
                 success: true,
                 response: confirmResponse,
                 sessionId: session.id,
+                mode: session.mode,
                 sessionStatus: 'active',
                 executedActions,
                 pendingActions: [],
@@ -695,6 +373,7 @@ export async function POST(req: NextRequest) {
                 success: true,
                 response: rejectResponse,
                 sessionId: session.id,
+                mode: session.mode,
                 sessionStatus: 'active',
                 executedActions: [],
                 pendingActions: []
@@ -724,20 +403,43 @@ export async function POST(req: NextRequest) {
                 success: true,
                 response: endResponse,
                 sessionId: session.id,
+                mode: session.mode,
                 sessionStatus: 'paused',
                 syncStatus: syncResult.success ? 'synced' : 'failed',
                 syncError: syncResult.error
             });
         }
 
-        // Google Docsからコンテキストを取得
-        const [profileResult, recordsResult] = await Promise.all([
-            readHealthProfileFromGoogleDocs(),
-            readRecordsFromGoogleDocs()
-        ]);
+        // モード判定: セッションにモードがなければ初回メッセージから検出
+        let currentMode: ChatMode;
+        if (session.mode) {
+            currentMode = session.mode as ChatMode;
+        } else {
+            const detection = detectMode(userMessage);
+            currentMode = detection.mode;
+            // セッションにモードを保存
+            await prisma.healthChatSession.update({
+                where: { id: session.id },
+                data: { mode: currentMode }
+            });
+        }
 
-        const profileContent = profileResult.success ? profileResult.content || '' : '';
-        const recordsContent = recordsResult.success ? recordsResult.content || '' : '';
+        // モードに応じてGoogle Docsからコンテキストを取得
+        let profileContent = '';
+        let recordsContent = '';
+
+        if (currentMode === 'profile_building') {
+            const profileResult = await readHealthProfileFromGoogleDocs();
+            profileContent = profileResult.success ? profileResult.content || '' : '';
+        } else if (currentMode === 'data_analysis') {
+            const [profileResult, recordsResult] = await Promise.all([
+                readHealthProfileFromGoogleDocs(),
+                readRecordsFromGoogleDocs()
+            ]);
+            profileContent = profileResult.success ? profileResult.content || '' : '';
+            recordsContent = recordsResult.success ? recordsResult.content || '' : '';
+        }
+        // help モードではGoogle Docs読み込み不要
 
         // 会話履歴を構築（サマリー化対応）
         const rawHistory = session.messages.map(m => ({
@@ -746,46 +448,63 @@ export async function POST(req: NextRequest) {
         }));
         const history = summarizeHistory(rawHistory);
 
-        // システムプロンプト生成
-        const systemPrompt = buildSystemPromptV2(profileContent, recordsContent);
+        // モード別システムプロンプト生成
+        const systemPrompt = buildSystemPrompt({
+            mode: currentMode,
+            profileContent,
+            recordsContent
+        });
 
         // AI呼び出し
         const aiResponse = await callGeminiAPI(systemPrompt, history, userMessage);
 
+        // MODE_SWITCH検出 → セッションのモードを更新
+        const newMode = detectModeSwitch(aiResponse);
+        let updatedMode = currentMode;
+        if (newMode && newMode !== currentMode) {
+            await prisma.healthChatSession.update({
+                where: { id: session.id },
+                data: { mode: newMode }
+            });
+            updatedMode = newMode;
+        }
+
         // レスポンス解析
         const { responseText, actions, detectedIssues, followUpTopic } = parseAIResponse(aiResponse);
 
-        // 高信頼度のアクションを実行
+        // プロフィール構築モードのみアクションを処理
         const executedActions: ProfileAction[] = [];
         const pendingActions: ProfileAction[] = [];
 
-        for (const action of actions) {
-            if (action.type === 'NONE') continue;
+        if (currentMode === 'profile_building') {
+            for (const action of actions) {
+                if (action.type === 'NONE') continue;
 
-            // 信頼度に基づいて実行/保留を判断（閾値統一: 0.8）
-            const threshold = action.type === 'DELETE' ? CONFIDENCE_THRESHOLD_DELETE : CONFIDENCE_THRESHOLD_DEFAULT;
+                const threshold = action.type === 'DELETE' ? CONFIDENCE_THRESHOLD_DELETE : CONFIDENCE_THRESHOLD_DEFAULT;
 
-            if (action.confidence >= threshold) {
-                const result = await executeProfileAction(user.id, action);
-                if (result.success) {
-                    executedActions.push(action);
+                if (action.confidence >= threshold) {
+                    const result = await executeProfileAction(user.id, action);
+                    if (result.success) {
+                        executedActions.push(action);
+                    }
+                } else {
+                    pendingActions.push(action);
                 }
-            } else {
-                pendingActions.push(action);
             }
         }
 
         // 最終レスポンス構築
         let finalResponse = responseText;
 
-        // 検出された問題を追加
-        if (detectedIssues.length > 0) {
-            finalResponse += formatIssuesForUser(detectedIssues);
-        }
+        // プロフィール構築モードのみ: 検出された問題と保留アクションを追加
+        if (currentMode === 'profile_building') {
+            if (detectedIssues.length > 0) {
+                finalResponse += formatIssuesForUser(detectedIssues);
+            }
 
-        // 保留中のアクションがある場合（詳細表示）
-        if (pendingActions.length > 0) {
-            finalResponse += formatPendingActionsForUser(pendingActions);
+            if (pendingActions.length > 0) {
+                finalResponse += formatPendingActionsForUser(pendingActions);
+            }
         }
 
         // メッセージ保存
@@ -810,6 +529,7 @@ export async function POST(req: NextRequest) {
             success: true,
             response: finalResponse,
             sessionId: session.id,
+            mode: updatedMode,
             sessionStatus: 'active',
             executedActions,
             pendingActions,

@@ -95,6 +95,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
   const [hasUpdates, setHasUpdates] = useState(false);
   const [pendingActions, setPendingActions] = useState<ProfileAction[]>([]);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [chatMode, setChatMode] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -152,6 +153,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         setSessionId(data.sessionId);
         setSessionStatus(data.status);
         setContext(data.context);
+        if (data.mode) setChatMode(data.mode);
 
         if (data.messages && data.messages.length > 0) {
           const restoredMessages: Message[] = data.messages.map((m: { id: string; role: 'user' | 'assistant'; content: string }) => ({
@@ -201,6 +203,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
       setSessionId(data.sessionId);
       setSessionStatus('active');
       setContext(data.context);
+      setChatMode(data.mode || null);
       setMessages([{
         id: generateMessageId(),
         role: 'assistant',
@@ -284,6 +287,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
 
         const data = await res.json();
         setPendingActions([]);
+        if (data.mode) setChatMode(data.mode);
         setMessages(prev => [...prev, {
           id: assistantMessageId,
           role: 'assistant',
@@ -384,6 +388,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
 
               if (data.done) {
                 setSessionId(data.sessionId);
+                if (data.mode) setChatMode(data.mode);
 
                 if (data.pendingActions && data.pendingActions.length > 0) {
                   setPendingActions(data.pendingActions);
@@ -443,6 +448,11 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5" />
           <span className="font-bold">AIチャット</span>
+          {chatMode && (
+            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">
+              {chatMode === 'profile_building' ? 'プロフィール構築' : chatMode === 'data_analysis' ? 'データ分析' : '使い方'}
+            </span>
+          )}
           {hasUpdates && (
             <span className="text-xs bg-teal-400/50 px-2 py-0.5 rounded-full">
               更新あり
