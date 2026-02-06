@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -37,11 +37,13 @@ export default function FloatingMenu() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const { openChat } = useChatModal();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // メニューが開いているときは背景スクロールを防止
+  // メニューが開いているときは背景スクロールを防止 & スクロール位置リセット
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      scrollRef.current?.scrollTo(0, 0);
     } else {
       document.body.style.overflow = '';
     }
@@ -145,7 +147,7 @@ export default function FloatingMenu() {
         </div>
 
         {/* Menu Content */}
-        <div className="flex-1 overflow-y-auto p-4 pb-24">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 pb-24">
           {/* AIチャットボタン */}
           <button
             onClick={() => {
