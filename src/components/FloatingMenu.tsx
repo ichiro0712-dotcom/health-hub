@@ -157,7 +157,10 @@ export default function FloatingMenu() {
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-all mb-2"
           >
             <MessageCircle className="w-5 h-5" />
-            <span className="font-bold">AIチャット</span>
+            <div className="text-left">
+              <span className="font-bold block">AIチャット</span>
+              <span className="text-xs opacity-70">健康相談・プロフィール作成</span>
+            </div>
           </button>
 
           {/* Main Menu */}

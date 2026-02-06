@@ -15,9 +15,10 @@
  * - 新規の場合はウェルカムメッセージ表示中にバックグラウンドでGoogle Docs同期
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { MessageCircle, Send, Loader2, X, RefreshCw, CloudOff, Cloud, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 interface Message {
   id: string;
@@ -46,10 +47,40 @@ interface ChatHearingV2Props {
   onClose?: () => void;
 }
 
-// ユニークIDを生成
-let messageIdCounter = 0;
-function generateMessageId(): string {
-  return `msg_${Date.now()}_${++messageIdCounter}`;
+// 内部リンクのパターン: → /path or /path 形式を検出
+const LINK_PATTERN = /(?:→\s*)?(\/([\w\-\/]+))/g;
+
+function renderLineWithLinks(line: string, lineIndex: number): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  const regex = new RegExp(LINK_PATTERN.source, 'g');
+  let match;
+
+  while ((match = regex.exec(line)) !== null) {
+    // マッチ前のテキスト
+    if (match.index > lastIndex) {
+      parts.push(line.slice(lastIndex, match.index));
+    }
+    const path = match[1];
+    parts.push(
+      <Link
+        key={`${lineIndex}-${match.index}`}
+        href={path}
+        className="text-teal-600 dark:text-teal-400 underline hover:text-teal-700 dark:hover:text-teal-300"
+      >
+        {path}
+      </Link>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  // 残りのテキスト
+  if (lastIndex < line.length) {
+    parts.push(line.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : line;
 }
 
 export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearingV2Props) {
@@ -68,6 +99,13 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const messageIdRef = useRef(0);
+
+  // ユニークIDを生成（インスタンスごとにrefで管理）
+  const generateMessageId = useCallback(() => {
+    return `msg_${Date.now()}_${++messageIdRef.current}`;
+  }, []);
 
   // メッセージ末尾へスクロール
   useEffect(() => {
@@ -75,6 +113,13 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // アンマウント時にストリーミングをキャンセル
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   // バックグラウンドでGoogle Docsを同期
   const syncGoogleDocs = useCallback(async () => {
@@ -135,10 +180,14 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
     };
 
     startChat();
-  }, [syncGoogleDocs]);
+  }, [syncGoogleDocs, generateMessageId]);
 
-  // 新規セッション開始（履歴クリア）
+  // 新規セッション開始（履歴クリア）- 確認ダイアログ付き
   const startNewSession = async () => {
+    if (messages.length > 1 && !confirm('現在の会話をリセットして新しいチャットを始めますか？')) {
+      return;
+    }
+
     setIsInitializing(true);
     setPendingActions([]);
 
@@ -188,6 +237,9 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
     onClose?.();
   };
 
+  // ストリーミング中かどうかを判定（空のアシスタントメッセージがある = ストリーミング開始直後）
+  const isStreaming = isLoading && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant';
+
   // メッセージ送信（ストリーミング対応）
   const sendMessage = async (overrideMessage?: string) => {
     const messageToSend = overrideMessage || inputValue.trim();
@@ -195,6 +247,10 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
 
     if (!overrideMessage) {
       setInputValue('');
+      // テキストエリアの高さをリセット
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+      }
     }
     const userMessageId = generateMessageId();
     const assistantMessageId = generateMessageId();
@@ -266,6 +322,9 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
     }
 
     // ストリーミングAPIを使用
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       // 空のアシスタントメッセージを追加（ストリーミング用）
       setMessages(prev => [...prev, { id: assistantMessageId, role: 'assistant', content: '' }]);
@@ -276,7 +335,8 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         body: JSON.stringify({
           message: messageToSend,
           sessionId
-        })
+        }),
+        signal: controller.signal
       });
 
       if (!res.ok) {
@@ -352,20 +412,25 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         }
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        // ユーザーによるキャンセル（アンマウント時）- 正常
+        return;
+      }
       console.error('Send message error:', error);
       toast.error('メッセージの送信に失敗しました');
       setMessages(prev => prev.filter(m => m.id !== userMessageId && m.id !== assistantMessageId));
       if (!overrideMessage) setInputValue(messageToSend);
     } finally {
+      abortControllerRef.current = null;
       setIsLoading(false);
       inputRef.current?.focus();
     }
   };
 
-  // キーボードイベント
+  // キーボードイベント: Enter送信 / Shift+Enter改行
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter' && e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
@@ -384,12 +449,12 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {/* 同期ボタン */}
           <button
             onClick={handleManualSync}
             disabled={isSyncing || isInitializing || isLoading}
-            className="p-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors"
+            className="flex items-center gap-1 px-2 py-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors text-xs"
             title={context?.synced ? 'データ同期済み' : 'Google Docsと同期'}
           >
             {isSyncing ? (
@@ -399,18 +464,21 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
             ) : (
               <CloudOff className="w-4 h-4" />
             )}
+            <span className="hidden sm:inline">{isSyncing ? '同期中' : '同期'}</span>
           </button>
           <button
             onClick={startNewSession}
             disabled={isInitializing || isLoading}
-            className="p-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors"
+            className="flex items-center gap-1 px-2 py-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors text-xs"
             title="新規セッション"
           >
             <RefreshCw className={`w-4 h-4 ${isInitializing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">新規</span>
           </button>
           <button
             onClick={handleClose}
-            className="p-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors"
+            className="p-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors ml-1"
+            title="閉じる"
           >
             <X className="w-5 h-5" />
           </button>
@@ -476,20 +544,26 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
                   }`}
                 >
                   <div className="text-sm whitespace-pre-wrap">
-                    {message.content.split('\n').map((line, i) => {
+                    {message.content.split('\n').map((line, i, arr) => {
                       if (line.startsWith('**') && line.endsWith('**')) {
                         return <strong key={i} className="block font-bold">{line.slice(2, -2)}</strong>;
                       }
                       if (line.startsWith('---')) {
                         return <hr key={i} className="my-2 border-slate-300 dark:border-slate-600" />;
                       }
-                      return <span key={i}>{line}{i < message.content.split('\n').length - 1 && <br />}</span>;
+                      return (
+                        <Fragment key={i}>
+                          {renderLineWithLinks(line, i)}
+                          {i < arr.length - 1 && <br />}
+                        </Fragment>
+                      );
                     })}
                   </div>
                 </div>
               </div>
             ))}
-            {isLoading && (
+            {/* ストリーミング中はテキストが流れるのでスピナー不要。非ストリーミング（pendingActions処理中）のみ表示 */}
+            {isLoading && !isStreaming && (
               <div className="flex justify-start">
                 <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-bl-md px-4 py-2">
                   <Loader2 className="w-4 h-4 animate-spin text-teal-500" />
@@ -501,58 +575,85 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         )}
       </div>
 
-      {/* 保留中のアクションがある場合のクイックアクションボタン */}
-      {pendingActions.length > 0 && !isLoading && (
-        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-t border-amber-200 dark:border-amber-700 flex items-center justify-center gap-3 flex-shrink-0">
-          <span className="text-xs text-amber-700 dark:text-amber-300">
-            確認が必要な更新があります
-          </span>
+      {/* セッション保存済みガイド */}
+      {sessionStatus === 'paused' && !isLoading && (
+        <div className="px-4 py-3 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-center flex-shrink-0">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            セッションは保存されました
+          </p>
           <button
-            onClick={() => sendMessage('はい')}
-            className="px-3 py-1 text-xs bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors"
+            onClick={startNewSession}
+            className="mt-2 px-4 py-1.5 text-sm bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors"
           >
-            はい
-          </button>
-          <button
-            onClick={() => sendMessage('いいえ')}
-            className="px-3 py-1 text-xs bg-slate-400 text-white rounded-full hover:bg-slate-500 transition-colors"
-          >
-            いいえ
+            新しいチャットを始める
           </button>
         </div>
       )}
 
-      {/* 入力エリア */}
-      <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-        <div className="flex items-end gap-2">
-          <textarea
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={sessionStatus === 'paused' ? 'セッションは保存されました' : 'メッセージを入力...'}
-            disabled={isLoading || sessionStatus === 'paused' || isInitializing}
-            rows={1}
-            className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-600 rounded-2xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:opacity-50 resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
-            style={{ height: 'auto' }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = 'auto';
-              target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-            }}
-          />
-          <button
-            onClick={() => sendMessage()}
-            disabled={isLoading || !inputValue.trim() || sessionStatus === 'paused' || isInitializing}
-            className="p-2 bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-          >
-            <Send className="w-5 h-5" />
-          </button>
+      {/* 保留中のアクションがある場合のクイックアクションボタン */}
+      {pendingActions.length > 0 && !isLoading && (
+        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-t border-amber-200 dark:border-amber-700 flex-shrink-0">
+          <div className="text-xs text-amber-700 dark:text-amber-300 mb-2">
+            <span className="font-medium">確認が必要な更新:</span>
+            <ul className="mt-1 space-y-0.5 ml-3">
+              {pendingActions.map((action, i) => (
+                <li key={i}>
+                  {action.type === 'ADD' ? '追加' : action.type === 'UPDATE' ? '更新' : '削除'}
+                  : {action.new_text || action.target_text || action.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => sendMessage('はい')}
+              className="px-4 py-1.5 text-xs bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors font-medium"
+            >
+              更新する
+            </button>
+            <button
+              onClick={() => sendMessage('いいえ')}
+              className="px-4 py-1.5 text-xs bg-slate-400 text-white rounded-full hover:bg-slate-500 transition-colors font-medium"
+            >
+              キャンセル
+            </button>
+          </div>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
-          Shift+Enter で送信 / 「保存して」で終了
-        </p>
-      </div>
+      )}
+
+      {/* 入力エリア */}
+      {sessionStatus !== 'paused' && (
+        <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="メッセージを入力..."
+              disabled={isLoading || isInitializing}
+              rows={2}
+              className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-600 rounded-2xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 disabled:opacity-50 resize-none min-h-[52px] max-h-[120px] overflow-y-auto"
+              style={{ height: 'auto' }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+              }}
+            />
+            <button
+              onClick={() => sendMessage()}
+              disabled={isLoading || !inputValue.trim() || isInitializing}
+              className="p-2.5 bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 text-center hidden sm:block">
+            Enter で送信 / Shift+Enter で改行
+          </p>
+        </div>
+      )}
     </div>
   );
 }
