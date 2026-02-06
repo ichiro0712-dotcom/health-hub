@@ -52,7 +52,7 @@ export default async function HelpPage() {
                     <div className="space-y-2 text-teal-50 text-sm">
                         <p>Health Hubは、あなたの健康データを一元管理し、AIが分析・アドバイスを提供するサービスです。</p>
                         <ol className="list-decimal list-inside space-y-1 ml-1">
-                            <li>まずは<strong className="text-white">健康プロフィール</strong>をAIチャットで作成しましょう</li>
+                            <li>まずは<strong className="text-white">健康プロフィール</strong>をH-Hubアシスタントで作成しましょう</li>
                             <li><strong className="text-white">健康診断の結果</strong>を写真アップロードまたは手入力で登録</li>
                             <li>スマートウォッチをお持ちなら<strong className="text-white">Fitbit連携</strong>で自動同期</li>
                             <li><strong className="text-white">データ推移</strong>で経年変化をチェック</li>
@@ -70,13 +70,13 @@ export default async function HelpPage() {
                             icon={<Heart className="w-4 h-4" />}
                             iconBg="bg-rose-50 dark:bg-rose-900/30 text-rose-500 dark:text-rose-400"
                             title="健康プロフィール"
-                            description="AIチャットで対話しながら健康情報を整理。基本属性、病歴、生活リズム、食生活など11のカテゴリで管理できます。"
+                            description="H-Hubアシスタントで対話しながら健康情報を整理。基本属性、病歴、生活リズム、食生活など11のカテゴリで管理できます。"
                             href="/health-profile"
                         />
                         <FeatureItem
                             icon={<MessageSquare className="w-4 h-4" />}
                             iconBg="bg-teal-50 dark:bg-teal-900/30 text-teal-500 dark:text-teal-400"
-                            title="AIチャット"
+                            title="H-Hubアシスタント"
                             description="健康プロフィールの作成・更新、診断データの分析・アドバイス、Health Hubの使い方サポートをAIがお手伝いします。右下のメニューから開けます。"
                             href="/help"
                         />
@@ -175,7 +175,7 @@ export default async function HelpPage() {
                             answer="はい。データはユーザーごとに分離して管理されており、他のユーザーからアクセスできません。Google Docs連携を使う場合も、あなた自身のGoogleアカウントに保存されます。"
                         />
                         <FaqItem
-                            question="AIチャットではどんなことができますか？"
+                            question="H-Hubアシスタントではどんなことができますか？"
                             answer="3つの機能があります。①健康プロフィールの作成・更新（対話形式で健康情報を整理）、②健康データの分析・アドバイス（診断結果の傾向分析や生活改善の提案）、③Health Hubの使い方サポートです。"
                         />
                         <FaqItem
@@ -196,7 +196,7 @@ export default async function HelpPage() {
                         />
                         <FaqItem
                             question="データを削除したい場合は？"
-                            answer="個別の診断記録は診断記録ページから削除できます。健康プロフィールの特定の項目はAIチャットで「〇〇を削除して」と伝えると対応します。アカウント自体の削除についてはお問い合わせください。"
+                            answer="個別の診断記録は診断記録ページから削除できます。健康プロフィールの特定の項目はH-Hubアシスタントで「〇〇を削除して」と伝えると対応します。アカウント自体の削除についてはお問い合わせください。"
                         />
                     </div>
                 </section>
@@ -204,7 +204,7 @@ export default async function HelpPage() {
                 {/* Contact */}
                 <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 text-center">
                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                        その他ご不明な点は、右下メニューの「AIチャット」で聞いてみてください。
+                        その他ご不明な点は、右下メニューの「H-Hubアシスタント」で聞いてみてください。
                     </p>
                 </section>
             </div>

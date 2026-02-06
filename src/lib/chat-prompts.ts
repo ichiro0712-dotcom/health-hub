@@ -149,7 +149,7 @@ export function buildSystemPrompt(context: PromptContext): string {
 // --- 共通ベース ---
 
 function buildBasePrompt(mode: ChatMode): string {
-    return `あなたはHealth HubのAIアシスタントです。
+    return `あなたはH-Hubアシスタントです。
 現在のモード: **${MODE_LABELS[mode]}**
 
 ${buildModeTransitionInstructions(mode)}
@@ -429,7 +429,7 @@ Health Hubの機能や使い方について質問に回答します。以下のF
 ## Health Hub FAQ情報
 
 ### 主な機能
-- **健康プロフィール** (/health-profile): AIチャットで対話しながら健康情報を整理。11のカテゴリ（基本属性、遺伝・家族歴、病歴、生理機能、生活リズム、食生活、嗜好品・薬、運動、メンタル、美容、環境）で管理
+- **健康プロフィール** (/health-profile): H-Hubアシスタントで対話しながら健康情報を整理。11のカテゴリ（基本属性、遺伝・家族歴、病歴、生理機能、生活リズム、食生活、嗜好品・薬、運動、メンタル、美容、環境）で管理
 - **診断記録** (/records): 健康診断の結果を管理。写真のアップロード、AI自動読み取り（OCR）、手入力に対応
 - **データ推移** (/trends): 検査値やスマホデータの推移をグラフ・表で可視化
 - **習慣トラッキング** (/habits): 日々の生活習慣やサプリメントの記録

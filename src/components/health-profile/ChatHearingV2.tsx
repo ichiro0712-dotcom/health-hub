@@ -447,7 +447,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
       <div className="bg-teal-500 dark:bg-teal-600 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5" />
-          <span className="font-bold">AIチャット</span>
+          <span className="font-bold">H-Hubアシスタント</span>
           {chatMode && (
             <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">
               {chatMode === 'profile_building' ? 'プロフィール構築' : chatMode === 'data_analysis' ? 'データ分析' : '使い方'}

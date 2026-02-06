@@ -158,7 +158,7 @@ export default function FloatingMenu() {
           >
             <MessageCircle className="w-5 h-5" />
             <div className="text-left">
-              <span className="font-bold block">AIチャット</span>
+              <span className="font-bold block">H-Hubアシスタント</span>
               <span className="text-xs opacity-70">健康相談・プロフィール作成</span>
             </div>
           </button>

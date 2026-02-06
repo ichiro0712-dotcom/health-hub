@@ -63,7 +63,7 @@ function buildWelcomeMessage(status: DataStatus): string {
     let choiceNum = 1;
 
     // 固定: あいさつ + できること
-    lines.push('こんにちは！Health Hubアシスタントです。');
+    lines.push('こんにちは！H-Hubアシスタントです。');
     lines.push('');
     lines.push('私はあなたの健康データの管理をお手伝いします。');
     lines.push('できることは以下です！');
