@@ -24,6 +24,8 @@ import {
     sanitizeUserInput,
     summarizeHistory,
     executeProfileAction,
+    updateQuestionProgress,
+    getAnsweredQuestionIds,
     CONFIDENCE_THRESHOLD_DEFAULT,
     CONFIDENCE_THRESHOLD_DELETE,
 } from '@/lib/chat-prompts';
@@ -142,10 +144,15 @@ export async function POST(req: NextRequest) {
     // モードに応じてGoogle Docsからコンテキストを取得
     let profileContent = '';
     let recordsContent = '';
+    let answeredQuestionIds: string[] = [];
 
     if (currentMode === 'profile_building') {
-        const profileResult = await readHealthProfileFromGoogleDocs();
+        const [profileResult, answeredIds] = await Promise.all([
+            readHealthProfileFromGoogleDocs(),
+            getAnsweredQuestionIds(user.id)
+        ]);
         profileContent = profileResult.success ? profileResult.content || '' : '';
+        answeredQuestionIds = answeredIds;
     } else if (currentMode === 'data_analysis') {
         const [profileResult, recordsResult] = await Promise.all([
             readHealthProfileFromGoogleDocs(),
@@ -167,7 +174,10 @@ export async function POST(req: NextRequest) {
     const systemPrompt = buildSystemPrompt({
         mode: currentMode,
         profileContent,
-        recordsContent
+        recordsContent,
+        answeredQuestionIds,
+        currentQuestionId: session.currentQuestionId,
+        currentPriority: session.currentPriority,
     });
 
     // Gemini APIをストリーミングで呼び出し
@@ -314,12 +324,14 @@ export async function POST(req: NextRequest) {
 
                 if (modeForClosure === 'profile_building') {
                     const actionMatch = fullResponse.match(/<!--PROFILE_ACTION\n([\s\S]*?)\nPROFILE_ACTION-->/);
+                    let answeredQuestionId: string | null = null;
 
                     if (actionMatch) {
                         try {
                             const parsed = JSON.parse(actionMatch[1]);
                             actions = parsed.actions || [];
                             detectedIssues = parsed.detected_issues || [];
+                            answeredQuestionId = parsed.answered_question_id || null;
                         } catch {
                             // パースエラーは無視
                         }
@@ -338,6 +350,19 @@ export async function POST(req: NextRequest) {
                             }
                         } else {
                             pendingActions.push(action);
+                        }
+                    }
+
+                    // 質問進捗を更新
+                    if (answeredQuestionId) {
+                        try {
+                            await updateQuestionProgress(
+                                userIdForClosure,
+                                sessionIdForClosure,
+                                answeredQuestionId
+                            );
+                        } catch (e) {
+                            console.error('Failed to update question progress:', e);
                         }
                     }
                 }

@@ -10,7 +10,7 @@
  */
 
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
-import { HEALTH_QUESTIONS } from '@/constants/health-questions';
+import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import prisma from '@/lib/prisma';
 
 // ============================================
@@ -28,6 +28,9 @@ export interface PromptContext {
     mode: ChatMode;
     profileContent: string;
     recordsContent: string;
+    answeredQuestionIds?: string[];
+    currentQuestionId?: string | null;
+    currentPriority?: number;
 }
 
 export interface ProfileAction {
@@ -75,6 +78,11 @@ export function detectMode(message: string): ModeDetectionResult {
     }
     if (/^[3３]$/.test(trimmed) || /使い方|ヘルプ/.test(trimmed)) {
         return { mode: 'help', confidence: 1.0 };
+    }
+
+    // おまかせ・始めたい系 → プロフィール構築
+    if (/おまかせ|お任せ|始め|お願い|やって|進めて/.test(trimmed)) {
+        return { mode: 'profile_building', confidence: 0.9 };
     }
 
     // 動的番号（4以降）+ テーマキーワード
@@ -125,7 +133,12 @@ export function buildSystemPrompt(context: PromptContext): string {
 
     switch (context.mode) {
         case 'profile_building':
-            return base + buildProfileBuildingPrompt(context.profileContent);
+            return base + buildProfileBuildingPrompt(
+                context.profileContent,
+                context.answeredQuestionIds || [],
+                context.currentQuestionId || null,
+                context.currentPriority || 3
+            );
         case 'data_analysis':
             return base + buildDataAnalysisPrompt(context.profileContent, context.recordsContent);
         case 'help':
@@ -184,12 +197,19 @@ function buildModeTransitionInstructions(currentMode: ChatMode): string {
 
 // --- プロフィール構築モード ---
 
-function buildProfileBuildingPrompt(profileContent: string): string {
+function buildProfileBuildingPrompt(
+    profileContent: string,
+    answeredQuestionIds: string[],
+    currentQuestionId: string | null,
+    currentPriority: number
+): string {
     const sectionIdList = DEFAULT_PROFILE_CATEGORIES
         .map(cat => `${cat.id}（${cat.title}）`)
         .join('\n  ');
 
-    const questionGuidance = buildQuestionGuidance(profileContent);
+    const { guidance, nextQuestion } = buildQuestionGuidance(
+        profileContent, answeredQuestionIds, currentQuestionId, currentPriority
+    );
 
     return `## あなたの役割: 健康プロフィールの構築・改善
 
@@ -201,17 +221,31 @@ ${profileContent || '（まだ情報がありません）'}
 ## 利用可能なセクションID
   ${sectionIdList}
 
-${questionGuidance}
+${guidance}
 
-## 重要なルール
+## ★最重要ルール: 既存情報は絶対に再質問しない
 
-1. **質問リストを参考にする**: 上記のヒアリングガイドの質問を参考に、まだプロフィールに情報がないトピックを1つずつ聞いてください
-2. **既存情報の尊重**: プロフィールに既に書いてあることは再度質問しない
-3. **1度に1つの質問**: ユーザーが圧倒されないよう、1回のメッセージで質問は1つだけ
-4. **確認が必要な場合**: confidence < 0.8 の更新は実行前に確認を求める
-5. **削除は慎重に**: confidence 0.95以上でないと自動実行しない
-6. **必ず質問を含める**: 終了希望以外は必ず1つ質問を含める
-7. **自然な相槌**: 回答に対して簡潔な共感を示してから次の質問へ
+**プロフィールに既に記載されている情報は、どんな場合でも再度質問しないでください。**
+例えば、プロフィールに「1978年7月12日生まれ」とあれば、生年月日や年齢の質問はスキップし、次の未回答の質問に進んでください。
+
+各質問の「抽出ヒント」に含まれるキーワードがプロフィールに既にあるかを確認してから質問を決めてください。
+
+## ★重要ルール: ユーザーが始めたいと言ったら即座に質問開始
+
+ユーザーが番号を選んだり「おまかせ」「始めたい」「お願い」などと言った場合は、確認や説明なしに**すぐに次の未回答の質問を1つ聞いてください**。
+「何から始めますか？」「どのセクションを更新しますか？」のような再確認は不要です。
+
+${nextQuestion ? `**今すぐ聞くべき次の質問**: ${nextQuestion.question}（質問ID: ${nextQuestion.id}）` : ''}
+
+## その他のルール
+
+1. **質問リストを厳密に使う**: 上記のヒアリングガイドの「⬜未回答」質問のみを聞く。「✅回答済み」はスキップ
+2. **1度に1つの質問**: ユーザーが圧倒されないよう、1回のメッセージで質問は1つだけ
+3. **確認が必要な場合**: confidence < 0.8 の更新は実行前に確認を求める
+4. **削除は慎重に**: confidence 0.95以上でないと自動実行しない
+5. **必ず質問を含める**: 終了希望以外は必ず1つ質問を含める
+6. **自然な相槌**: 回答に対して簡潔な共感を示してから次の質問へ
+7. **回答済みIDの報告**: PROFILE_ACTIONのanswered_question_idに、この回答で回答された質問IDを記載
 
 ## 出力形式
 
@@ -230,65 +264,131 @@ ${questionGuidance}
     }
   ],
   "detected_issues": [],
-  "follow_up_topic": "次に聞くと良いトピック"
+  "follow_up_topic": "次に聞くと良いトピック",
+  "answered_question_id": "回答された質問ID（例: 1-1）またはnull"
 }
 PROFILE_ACTION-->
 
 ## 会話の進め方
 
 - ユーザーが「保存して」「終わり」と言ったらセッション終了を提案
-- プロフィールが空の場合は基本情報（年齢・身長・体重）から聞く
-- プロフィールがある程度埋まっている場合は不足部分を自然に質問`;
+- 上記の次の質問から順番に1つずつ進める
+- 1つの質問に対するユーザーの回答を受け取ったら、PROFILE_ACTIONで情報を保存し、次の未回答質問へ進む`;
 }
 
 // --- 質問ガイダンス（プロフィール構築モード用） ---
+// extractionHintsを使って質問単位で回答済みかを精密判定
 
-function buildQuestionGuidance(profileContent: string): string {
-    const profileLower = (profileContent || '').toLowerCase();
+function isQuestionAnsweredByProfile(q: typeof HEALTH_QUESTIONS[number], profileContent: string): boolean {
+    if (!profileContent || profileContent.length < 10) return false;
+    const profileLower = profileContent.toLowerCase();
 
-    // セクション別にプロフィールに情報があるか簡易判定
-    const filledSections = new Set<string>();
-    for (const cat of DEFAULT_PROFILE_CATEGORIES) {
-        // 各セクションのタイトルキーワードがプロフィールに含まれるかチェック
-        const titleKeywords = cat.title.replace(/^\d+\.\s*/, '').split(/[・]/);
-        const hasContent = titleKeywords.some(kw => profileLower.includes(kw.toLowerCase()));
-        if (hasContent && profileContent.length > 50) {
-            filledSections.add(cat.id);
+    // extractionHintsのうち、1つでもプロフィール内に含まれていれば「回答済み」とみなす
+    const matchCount = q.extractionHints.filter(hint =>
+        profileLower.includes(hint.toLowerCase())
+    ).length;
+
+    // ヒントの半分以上がマッチすれば回答済みと判定
+    return matchCount >= Math.max(1, Math.ceil(q.extractionHints.length * 0.4));
+}
+
+function buildQuestionGuidance(
+    profileContent: string,
+    answeredQuestionIds: string[],
+    currentQuestionId: string | null,
+    currentPriority: number
+): { guidance: string; nextQuestion: typeof HEALTH_QUESTIONS[number] | null } {
+    const answeredSet = new Set(answeredQuestionIds);
+
+    // 各質問の回答状態を判定（DB記録 OR プロフィール内容から推定）
+    const questionStatus = HEALTH_QUESTIONS.map(q => {
+        const dbAnswered = answeredSet.has(q.id);
+        const profileAnswered = isQuestionAnsweredByProfile(q, profileContent);
+        return {
+            question: q,
+            isAnswered: dbAnswered || profileAnswered,
+        };
+    });
+
+    // 未回答質問をpriority順・セクション順で取得
+    const sectionOrder = [
+        'basic_attributes', 'genetics', 'medical_history', 'physiology',
+        'circadian', 'diet_nutrition', 'substances', 'exercise',
+        'mental', 'beauty_hygiene', 'environment'
+    ];
+
+    const unansweredByPriority = (priority: number) =>
+        questionStatus
+            .filter(qs => !qs.isAnswered && qs.question.priority === priority)
+            .sort((a, b) => {
+                const aIdx = sectionOrder.indexOf(a.question.sectionId);
+                const bIdx = sectionOrder.indexOf(b.question.sectionId);
+                if (aIdx !== bIdx) return aIdx - bIdx;
+                return a.question.id.localeCompare(b.question.id);
+            });
+
+    const unanswered3 = unansweredByPriority(3);
+    const unanswered2 = unansweredByPriority(2);
+    const answered3 = questionStatus.filter(qs => qs.isAnswered && qs.question.priority === 3);
+    const answered2 = questionStatus.filter(qs => qs.isAnswered && qs.question.priority === 2);
+
+    // 次の質問を決定
+    let nextQuestion: typeof HEALTH_QUESTIONS[number] | null = null;
+
+    // currentQuestionIdが指定されていて未回答ならそれを優先
+    if (currentQuestionId) {
+        const currentQ = questionStatus.find(qs => qs.question.id === currentQuestionId);
+        if (currentQ && !currentQ.isAnswered) {
+            nextQuestion = currentQ.question;
         }
     }
 
-    // 未回答のセクションの質問を優先
-    const priority3Questions = HEALTH_QUESTIONS
-        .filter(q => q.priority === 3)
-        .sort((a, b) => {
-            // 未入力セクションを先に
-            const aFilled = filledSections.has(a.sectionId) ? 1 : 0;
-            const bFilled = filledSections.has(b.sectionId) ? 1 : 0;
-            if (aFilled !== bFilled) return aFilled - bFilled;
-            return a.id.localeCompare(b.id);
-        });
-
-    const priority2Questions = HEALTH_QUESTIONS
-        .filter(q => q.priority === 2 && !filledSections.has(q.sectionId));
-
-    let guidance = `\n## ヒアリングガイド（質問リスト）\n\n`;
-    guidance += `以下の質問リストを参考に、まだプロフィールに情報がないトピックについて聞いてください。\n`;
-    guidance += `**優先度3（最重要）** の質問から順に進めてください。既にプロフィールにある情報はスキップしてください。\n\n`;
-
-    guidance += `### 優先度3（最重要）- まずこちらから\n`;
-    for (const q of priority3Questions.slice(0, 25)) {
-        const sectionName = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === q.sectionId)?.title || q.sectionId;
-        guidance += `- **[${sectionName}]** ${q.question}\n  → 意図: ${q.intent}\n`;
-    }
-
-    if (priority2Questions.length > 0) {
-        guidance += `\n### 優先度2（詳細情報）- 優先度3が終わったら\n`;
-        for (const q of priority2Questions.slice(0, 10)) {
-            guidance += `- [${q.sectionId}] ${q.question}\n`;
+    // なければ、現在のpriorityの未回答から
+    if (!nextQuestion) {
+        const currentUnanswered = currentPriority === 3 ? unanswered3 :
+            currentPriority === 2 ? unanswered2 : unansweredByPriority(1);
+        if (currentUnanswered.length > 0) {
+            nextQuestion = currentUnanswered[0].question;
+        } else if (unanswered3.length > 0) {
+            nextQuestion = unanswered3[0].question;
+        } else if (unanswered2.length > 0) {
+            nextQuestion = unanswered2[0].question;
         }
     }
 
-    return guidance;
+    // ガイダンステキスト生成
+    let guidance = `\n## ヒアリングガイド（質問リスト + 回答状態）\n\n`;
+    guidance += `進捗: 優先度3は ${answered3.length}/${answered3.length + unanswered3.length} 回答済み、`;
+    guidance += `優先度2は ${answered2.length}/${answered2.length + unanswered2.length} 回答済み\n\n`;
+
+    if (unanswered3.length > 0) {
+        guidance += `### 優先度3（最重要）- 未回答の質問\n`;
+        for (const qs of unanswered3.slice(0, 20)) {
+            const q = qs.question;
+            const sectionName = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === q.sectionId)?.title || q.sectionId;
+            const marker = nextQuestion?.id === q.id ? '👉' : '⬜';
+            guidance += `${marker} **[${sectionName}]** ${q.question}（ID: ${q.id}）\n  → 抽出ヒント: ${q.extractionHints.join('、')}\n`;
+        }
+    } else {
+        guidance += `### ✅ 優先度3の質問はすべて回答済みです！\n`;
+    }
+
+    if (unanswered3.length === 0 && unanswered2.length > 0) {
+        guidance += `\n### 優先度2（詳細情報）- 未回答の質問\n`;
+        for (const qs of unanswered2.slice(0, 15)) {
+            const q = qs.question;
+            const marker = nextQuestion?.id === q.id ? '👉' : '⬜';
+            guidance += `${marker} [${q.sectionId}] ${q.question}（ID: ${q.id}）\n`;
+        }
+    }
+
+    // 回答済み質問の一覧（AI確認用、コンパクト）
+    if (answered3.length > 0) {
+        guidance += `\n### 回答済み（スキップすること）\n`;
+        guidance += answered3.map(qs => `✅ ${qs.question.id}: ${qs.question.extractionHints.slice(0, 2).join('、')}`).join('\n') + '\n';
+    }
+
+    return { guidance, nextQuestion };
 }
 
 // --- データ分析モード ---
@@ -400,6 +500,88 @@ export function summarizeHistory(messages: { role: string; content: string }[]):
     }
 
     return recentMessages;
+}
+
+/**
+ * 質問の回答進捗を更新し、セッションのチェックポイントも更新する
+ */
+export async function updateQuestionProgress(
+    userId: string,
+    sessionId: string,
+    answeredQuestionId: string,
+    answerSummary?: string
+): Promise<void> {
+    const question = HEALTH_QUESTIONS.find(q => q.id === answeredQuestionId);
+    if (!question) return;
+
+    // HealthQuestionProgress をupsert
+    await prisma.healthQuestionProgress.upsert({
+        where: { userId_questionId: { userId, questionId: answeredQuestionId } },
+        create: {
+            userId,
+            questionId: answeredQuestionId,
+            sectionId: question.sectionId,
+            priority: question.priority,
+            isAnswered: true,
+            answerSummary: answerSummary || null,
+        },
+        update: {
+            isAnswered: true,
+            answerSummary: answerSummary || undefined,
+        }
+    });
+
+    // 次の質問を算出してセッションのチェックポイントを更新
+    const allAnswered = await prisma.healthQuestionProgress.findMany({
+        where: { userId, isAnswered: true },
+        select: { questionId: true }
+    });
+    const answeredIds = allAnswered.map(a => a.questionId);
+
+    // 現在のセッションのpriorityを取得
+    const session = await prisma.healthChatSession.findUnique({
+        where: { id: sessionId },
+        select: { currentPriority: true }
+    });
+    const currentPriority = (session?.currentPriority || 3) as 3 | 2 | 1;
+
+    const nextQ = getNextQuestion(answeredIds, currentPriority);
+
+    if (nextQ) {
+        await prisma.healthChatSession.update({
+            where: { id: sessionId },
+            data: {
+                currentQuestionId: nextQ.id,
+                currentSectionId: nextQ.sectionId,
+                currentPriority: nextQ.priority,
+            }
+        });
+    } else {
+        // 現在のpriorityが完了 → 次のpriorityへ
+        const nextPriority = currentPriority === 3 ? 2 : currentPriority === 2 ? 1 : null;
+        if (nextPriority) {
+            const nextQInLowerPriority = getNextQuestion(answeredIds, nextPriority as 3 | 2 | 1);
+            await prisma.healthChatSession.update({
+                where: { id: sessionId },
+                data: {
+                    currentQuestionId: nextQInLowerPriority?.id || null,
+                    currentSectionId: nextQInLowerPriority?.sectionId || null,
+                    currentPriority: nextPriority,
+                }
+            });
+        }
+    }
+}
+
+/**
+ * ユーザーの回答済み質問IDリストを取得
+ */
+export async function getAnsweredQuestionIds(userId: string): Promise<string[]> {
+    const progress = await prisma.healthQuestionProgress.findMany({
+        where: { userId, isAnswered: true },
+        select: { questionId: true }
+    });
+    return progress.map(p => p.questionId);
 }
 
 export async function executeProfileAction(

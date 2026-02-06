@@ -28,6 +28,8 @@ import {
     sanitizeUserInput,
     summarizeHistory,
     executeProfileAction,
+    updateQuestionProgress,
+    getAnsweredQuestionIds,
     CONFIDENCE_THRESHOLD_DEFAULT,
     CONFIDENCE_THRESHOLD_DELETE,
 } from '@/lib/chat-prompts';
@@ -84,6 +86,7 @@ interface ParsedAIResponse {
     actions: ProfileAction[];
     detectedIssues: DetectedIssue[];
     followUpTopic?: string;
+    answeredQuestionId?: string | null;
 }
 
 // ============================================
@@ -148,6 +151,7 @@ function parseAIResponse(response: string): ParsedAIResponse {
     let actions: ProfileAction[] = [];
     let detectedIssues: DetectedIssue[] = [];
     let followUpTopic: string | undefined;
+    let answeredQuestionId: string | null = null;
 
     if (actionMatch) {
         try {
@@ -155,12 +159,13 @@ function parseAIResponse(response: string): ParsedAIResponse {
             actions = parsed.actions || [];
             detectedIssues = parsed.detected_issues || [];
             followUpTopic = parsed.follow_up_topic;
+            answeredQuestionId = parsed.answered_question_id || null;
         } catch (e) {
             console.error('Failed to parse PROFILE_ACTION:', e);
         }
     }
 
-    return { responseText, actions, detectedIssues, followUpTopic };
+    return { responseText, actions, detectedIssues, followUpTopic, answeredQuestionId };
 }
 
 // ============================================
@@ -427,10 +432,15 @@ export async function POST(req: NextRequest) {
         // モードに応じてGoogle Docsからコンテキストを取得
         let profileContent = '';
         let recordsContent = '';
+        let answeredQuestionIds: string[] = [];
 
         if (currentMode === 'profile_building') {
-            const profileResult = await readHealthProfileFromGoogleDocs();
+            const [profileResult, answeredIds] = await Promise.all([
+                readHealthProfileFromGoogleDocs(),
+                getAnsweredQuestionIds(user.id)
+            ]);
             profileContent = profileResult.success ? profileResult.content || '' : '';
+            answeredQuestionIds = answeredIds;
         } else if (currentMode === 'data_analysis') {
             const [profileResult, recordsResult] = await Promise.all([
                 readHealthProfileFromGoogleDocs(),
@@ -452,7 +462,10 @@ export async function POST(req: NextRequest) {
         const systemPrompt = buildSystemPrompt({
             mode: currentMode,
             profileContent,
-            recordsContent
+            recordsContent,
+            answeredQuestionIds,
+            currentQuestionId: session.currentQuestionId,
+            currentPriority: session.currentPriority,
         });
 
         // AI呼び出し
@@ -470,7 +483,7 @@ export async function POST(req: NextRequest) {
         }
 
         // レスポンス解析
-        const { responseText, actions, detectedIssues, followUpTopic } = parseAIResponse(aiResponse);
+        const { responseText, actions, detectedIssues, followUpTopic, answeredQuestionId } = parseAIResponse(aiResponse);
 
         // プロフィール構築モードのみアクションを処理
         const executedActions: ProfileAction[] = [];
@@ -489,6 +502,15 @@ export async function POST(req: NextRequest) {
                     }
                 } else {
                     pendingActions.push(action);
+                }
+            }
+
+            // 質問進捗を更新
+            if (answeredQuestionId) {
+                try {
+                    await updateQuestionProgress(user.id, session.id, answeredQuestionId);
+                } catch (e) {
+                    console.error('Failed to update question progress:', e);
                 }
             }
         }
