@@ -83,11 +83,6 @@ const CONFIDENCE_THRESHOLD_DEFAULT = 0.8;
 const CONFIDENCE_THRESHOLD_DELETE = 0.95;
 const MAX_HISTORY_MESSAGES = 20;
 
-const MEDICAL_DISCLAIMER = `
-
----
-⚠️ **ご注意**: このAIは健康情報の記録をお手伝いするものであり、医療アドバイスを提供するものではありません。健康上の懸念がある場合は、必ず医師にご相談ください。`;
-
 // ============================================
 // 会話履歴のサマリー化
 // ============================================
@@ -113,10 +108,7 @@ function buildSystemPromptV2(
         .map(cat => `${cat.id}（${cat.title}）`)
         .join('\n  ');
 
-    return `あなたは健康プロフィールの構築・改善を支援するAIアシスタントです。
-
-## 重要な注意事項
-あなたは医療専門家ではありません。医療アドバイスは提供せず、常に「医師への相談」を推奨してください。
+    return `あなたはHealth Hubの健康プロフィール構築・改善・分析を支援するAIアシスタントです。
 
 ## あなたが持っている情報
 
@@ -129,13 +121,60 @@ ${recordsContent ? `${recordsContent.substring(0, 8000)}${recordsContent.length 
 ## 利用可能なセクションID
   ${sectionIdList}
 
+## あなたの役割
+
+1. **プロフィールの構築・改善**: ユーザーとの対話から健康情報を聞き取り、プロフィールに追加・更新・削除する
+2. **健康データの分析・アドバイス**: 上記のプロフィールや診断記録データを読み取り、ユーザーの質問に対して分析・傾向の指摘・生活改善のアドバイスを提供する
+3. **Health Hubの使い方サポート**: アプリの機能や使い方について質問されたら、下記のFAQ情報をもとに回答する
+4. **自然な対話**: ユーザーの話の流れに沿って深掘りし、適切なタイミングで関連質問をする
+
+## ウェルカムメッセージの番号選択への対応
+
+チャット開始時にユーザーへ番号付きの選択肢を表示しています。ユーザーが数字（半角「1」、全角「１」）や番号に対応する言葉で回答した場合、該当するトピックとして解釈して応答してください。
+- 「１」「1」「プロフィール」→ 健康プロフィールの作成・更新の対話を開始
+- 「２」「2」「分析」「アドバイス」→ 健康データの分析・アドバイスを開始
+- 「３」「3」「使い方」「ヘルプ」→ Health Hubの使い方を説明
+- その他の番号 → ウェルカムメッセージで表示した順に対応するトピックを開始
+- 「前回の続き」「１」（再開時）→ 直前の会話の文脈を引き継いで会話を続ける
+
+## 設定ページへの誘導
+
+連携や設定に関する質問には、チャット内で設定を完結させず、該当する設定ページへ誘導してください：
+- Fitbit連携 → 「Fitbitの連携は設定画面から行えます。こちらをご確認ください → /settings/fitbit」
+- Google Docs連携 → 「Google Docsの連携設定はこちら → /settings/google-docs」
+- スマホデータ連携 → 「スマートフォンとの連携設定はこちら → /settings/data-sync」
+- 検査項目の設定 → 「検査項目の設定はこちら → /profile/settings/items」
+- ヘルプ・FAQ → 「詳しくはヘルプページをご覧ください → /help」
+
+## Health Hub FAQ情報
+
+以下はHealth Hubの主な機能です。使い方について質問されたらこの情報をもとに回答してください。
+
+### 主な機能
+- **健康プロフィール** (/health-profile): AIチャットで対話しながら健康情報を整理。11のカテゴリ（基本属性、遺伝・家族歴、病歴、生理機能、生活リズム、食生活、嗜好品・薬、運動、メンタル、美容、環境）で管理
+- **診断記録** (/records): 健康診断の結果を管理。写真のアップロード、AI自動読み取り（OCR）、手入力に対応
+- **データ推移** (/trends): 検査値やスマホデータの推移をグラフ・表で可視化。経年変化の確認に便利
+- **習慣トラッキング** (/habits): 日々の生活習慣やサプリメントの記録
+- **動画** (/videos): 健康に関する動画コンテンツ
+- **提携クリニック** (/clinics): 提携クリニック情報
+- **オンライン処方** (/prescription): オンライン処方サービス
+
+### データ連携
+- **Fitbit連携** (/settings/fitbit): OAuth認証で心拍数、睡眠、HRV、歩数などを自動同期
+- **Android Health Connect**: スマホのHealth Connectアプリ経由でGarmin、Samsung等のデータも同期可能
+- **Google Docs連携** (/settings/google-docs): 健康データをGoogle Docsに自動エクスポート。ChatGPTやGeminiなど外部AIとのデータ共有に利用可能
+
+### データの入力方法
+- **AI自動入力**: 健康診断結果の写真をアップロード → AIが自動で読み取り
+- **手入力**: 検査値を直接入力
+- **デバイス連携**: Fitbit・Health Connectからの自動取り込み
+
 ## 重要なルール
 
 1. **既存情報の尊重**: プロフィールに既に書いてあることは再度質問しない
 2. **確認が必要な場合**: confidence < 0.8 の更新は実行前に確認を求める
 3. **削除は慎重に**: confidence 0.95以上でないと自動実行しない
-4. **医療アドバイス禁止**: 症状について相談されても診断はせず、医師への相談を勧める
-5. **必ず質問を含める**: 終了希望以外は必ず1つ質問を含める
+4. **必ず質問を含める**: 終了希望以外は必ず1つ質問を含める
 
 ## 出力形式
 
@@ -360,6 +399,9 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
         async start(controller) {
             const reader = geminiResponse.body!.getReader();
+            // PROFILE_ACTIONブロックがチャンクをまたぐ場合のバッファ
+            let insideProfileAction = false;
+            let pendingBuffer = '';
 
             try {
                 while (true) {
@@ -381,10 +423,46 @@ export async function POST(req: NextRequest) {
                                 if (text) {
                                     fullResponse += text;
 
-                                    // PROFILE_ACTIONブロックを除いたテキストのみを送信
-                                    const cleanText = text.replace(/<!--PROFILE_ACTION[\s\S]*?PROFILE_ACTION-->/g, '');
-                                    if (cleanText) {
-                                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: cleanText })}\n\n`));
+                                    // PROFILE_ACTIONブロックのフィルタリング（チャンクまたぎ対応）
+                                    let textToProcess = pendingBuffer + text;
+                                    pendingBuffer = '';
+
+                                    if (insideProfileAction) {
+                                        // ブロック終了を探す
+                                        const endIdx = textToProcess.indexOf('PROFILE_ACTION-->');
+                                        if (endIdx !== -1) {
+                                            insideProfileAction = false;
+                                            textToProcess = textToProcess.substring(endIdx + 'PROFILE_ACTION-->'.length);
+                                        } else {
+                                            // まだブロック内 - 送信しない
+                                            continue;
+                                        }
+                                    }
+
+                                    // 完全なブロックを除去
+                                    textToProcess = textToProcess.replace(/<!--PROFILE_ACTION[\s\S]*?PROFILE_ACTION-->/g, '');
+
+                                    // ブロック開始が含まれているが終了がない場合
+                                    const startIdx = textToProcess.indexOf('<!--PROFILE_ACTION');
+                                    if (startIdx !== -1) {
+                                        insideProfileAction = true;
+                                        const beforeBlock = textToProcess.substring(0, startIdx);
+                                        if (beforeBlock) {
+                                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: beforeBlock })}\n\n`));
+                                        }
+                                        continue;
+                                    }
+
+                                    // 「<!--」で始まるPROFILE_ACTIONの部分的な開始を検出
+                                    // (例: チャンク末尾が「<!--PROF」で終わる場合)
+                                    const partialMarkerIdx = textToProcess.lastIndexOf('<!--');
+                                    if (partialMarkerIdx !== -1 && partialMarkerIdx > textToProcess.length - '<!--PROFILE_ACTION'.length) {
+                                        pendingBuffer = textToProcess.substring(partialMarkerIdx);
+                                        textToProcess = textToProcess.substring(0, partialMarkerIdx);
+                                    }
+
+                                    if (textToProcess) {
+                                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: textToProcess })}\n\n`));
                                     }
                                 }
                             } catch {
@@ -392,6 +470,11 @@ export async function POST(req: NextRequest) {
                             }
                         }
                     }
+                }
+
+                // バッファに残ったテキストがあれば送信（PROFILE_ACTIONでなかった場合）
+                if (pendingBuffer && !insideProfileAction) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: pendingBuffer })}\n\n`));
                 }
 
                 // ストリーミング完了後、アクションを処理
@@ -426,13 +509,6 @@ export async function POST(req: NextRequest) {
                     } else {
                         pendingActions.push(action);
                     }
-                }
-
-                // 医療免責事項の追加
-                const seriousSymptomKeywords = /胸痛|動悸|息切れ|めまい|失神|血|痛み|発熱|腫れ|しびれ/;
-                if (seriousSymptomKeywords.test(userMessage) || seriousSymptomKeywords.test(fullResponse)) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: MEDICAL_DISCLAIMER })}\n\n`));
-                    fullResponse += MEDICAL_DISCLAIMER;
                 }
 
                 // メッセージを保存

@@ -15,6 +15,8 @@ const geistMono = Geist_Mono({
 
 import Providers from "@/components/Providers";
 import AutoSyncProvider from "@/components/AutoSyncProvider";
+import { ChatModalProvider } from "@/contexts/ChatModalContext";
+import ChatModal from "@/components/ChatModal";
 
 // Next.js 14+: viewportとthemeColorは別途exportする
 export const viewport: Viewport = {
@@ -53,20 +55,23 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
-          <AutoSyncProvider>
-            <MobileLayoutFix />
-            {/* スキップリンク（アクセシビリティ: M-6） */}
-            <a
-              href="#main-content"
-              className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-teal-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg"
-            >
-              メインコンテンツへスキップ
-            </a>
-            <div id="main-content" className="pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] min-h-screen">
-              {children}
-            </div>
-            <FloatingMenu />
-          </AutoSyncProvider>
+          <ChatModalProvider>
+            <AutoSyncProvider>
+              <MobileLayoutFix />
+              {/* スキップリンク（アクセシビリティ: M-6） */}
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-teal-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg"
+              >
+                メインコンテンツへスキップ
+              </a>
+              <div id="main-content" className="pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] min-h-screen">
+                {children}
+              </div>
+              <FloatingMenu />
+              <ChatModal />
+            </AutoSyncProvider>
+          </ChatModalProvider>
         </Providers>
         <Toaster />
       </body>

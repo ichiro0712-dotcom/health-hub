@@ -26,13 +26,17 @@ import {
   Building2,
   Pill,
   Plane,
+  HelpCircle,
+  MessageCircle,
 } from 'lucide-react';
 import Image from 'next/image';
+import { useChatModal } from '@/contexts/ChatModalContext';
 
 export default function FloatingMenu() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const { openChat } = useChatModal();
 
   // メニューが開いているときは背景スクロールを防止
   useEffect(() => {
@@ -74,6 +78,7 @@ export default function FloatingMenu() {
 
   const settingsItems = [
     { href: '/profile', icon: User, label: 'マイページ' },
+    { href: '/help', icon: HelpCircle, label: 'ヘルプ・FAQ' },
     { href: '/profile/settings/items', icon: Settings, label: '検査項目・基準値設定' },
     { href: '/profile/settings/items/merge', icon: Layers, label: '検査項目の統合' },
     { href: '/settings/data-sync', icon: Smartphone, label: 'スマホデータ連携' },
@@ -141,6 +146,18 @@ export default function FloatingMenu() {
 
         {/* Menu Content */}
         <div className="flex-1 overflow-y-auto p-4 pb-24">
+          {/* AIチャットボタン */}
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              openChat();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-all mb-2"
+          >
+            <MessageCircle className="w-5 h-5" />
+            <span className="font-bold">AIチャット</span>
+          </button>
+
           {/* Main Menu */}
           <nav className="space-y-1">
             {mainMenuItems.map((item) => {

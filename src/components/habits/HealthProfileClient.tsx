@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
     Activity, Save, Plus, Copy, ChevronDown, ChevronUp, Trash2, Check, Loader2
 } from 'lucide-react';
@@ -13,7 +13,7 @@ import {
     getHealthProfile,
 } from '@/app/actions/health-profile';
 import { DEFAULT_PROFILE_CATEGORIES, HealthProfileSectionData } from '@/constants/health-profile';
-import ChatHearingV2 from '@/components/health-profile/ChatHearingV2';
+import { CHAT_CONTENT_UPDATED_EVENT } from '@/components/ChatModal';
 
 interface Props {
     initialSections: HealthProfileSectionData[];
@@ -196,6 +196,18 @@ export default function HealthProfileClient({ initialSections }: Props) {
         });
     }, [sections]);
 
+    // チャットからのプロフィール更新を監視
+    useEffect(() => {
+        const handleChatUpdate = async () => {
+            const result = await getHealthProfile();
+            if (result.data) {
+                setSections(result.data);
+            }
+        };
+        window.addEventListener(CHAT_CONTENT_UPDATED_EVENT, handleChatUpdate);
+        return () => window.removeEventListener(CHAT_CONTENT_UPDATED_EVENT, handleChatUpdate);
+    }, []);
+
     // 入力されているセクション数をカウント
     const filledCount = sections.filter(s => s.content.trim()).length;
 
@@ -262,17 +274,6 @@ export default function HealthProfileClient({ initialSections }: Props) {
 
             {/* メインコンテンツ */}
             <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
-                {/* チャットヒアリング（V2: Google Docs連携） */}
-                <ChatHearingV2
-                    onContentUpdated={async () => {
-                        // チャットで更新されたらセクションを再読み込み
-                        const result = await getHealthProfile();
-                        if (result.data) {
-                            setSections(result.data);
-                        }
-                    }}
-                />
-
                 <div className="space-y-3">
                     {sections.map((section) => {
                         const isExpanded = expandedSections.has(section.categoryId);

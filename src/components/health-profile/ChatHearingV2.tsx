@@ -1,17 +1,18 @@
 'use client';
 
 /**
- * ChatHearingV2 - 楽観的UI対応チャットコンポーネント
+ * ChatHearingV2 - AIチャットコンポーネント
+ *
+ * グローバルモーダルから呼び出される。マウント時に自動でセッション開始。
+ *
+ * 機能:
+ * - 健康プロフィールの構築・改善
+ * - 健康データの分析・アドバイス
+ * - Health Hubの使い方サポート
  *
  * 高速起動:
  * - 既存セッションがあれば即座に表示
  * - 新規の場合はウェルカムメッセージ表示中にバックグラウンドでGoogle Docs同期
- * - Google Docsには既に外部データ（健康診断等）も含まれているため、別途取り込みは不要
- *
- * 監査対応:
- * - pendingActionsの確認/拒否処理
- * - Google Docs同期エラーの通知
- * - レート制限エラーの表示
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -42,6 +43,7 @@ interface SessionContext {
 
 interface ChatHearingV2Props {
   onContentUpdated?: () => void;
+  onClose?: () => void;
 }
 
 // ユニークIDを生成
@@ -50,10 +52,9 @@ function generateMessageId(): string {
   return `msg_${Date.now()}_${++messageIdCounter}`;
 }
 
-export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearingV2Props) {
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -94,48 +95,47 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
     }
   }, []);
 
-  // チャット開始（楽観的UI）
-  const startChat = async () => {
-    setIsInitializing(true);
-    setIsOpen(true);
+  // マウント時に自動でチャット開始
+  useEffect(() => {
+    const startChat = async () => {
+      setIsInitializing(true);
+      try {
+        const res = await fetch('/api/health-chat/v2/session');
+        if (!res.ok) throw new Error('Failed to start session');
 
-    try {
-      const res = await fetch('/api/health-chat/v2/session');
-      if (!res.ok) throw new Error('Failed to start session');
+        const data = await res.json();
+        setSessionId(data.sessionId);
+        setSessionStatus(data.status);
+        setContext(data.context);
 
-      const data = await res.json();
-      setSessionId(data.sessionId);
-      setSessionStatus(data.status);
-      setContext(data.context);
+        if (data.messages && data.messages.length > 0) {
+          const restoredMessages: Message[] = data.messages.map((m: { id: string; role: 'user' | 'assistant'; content: string }) => ({
+            id: m.id || generateMessageId(),
+            role: m.role,
+            content: m.content
+          }));
+          setMessages(restoredMessages);
+        } else {
+          setMessages([{
+            id: generateMessageId(),
+            role: 'assistant',
+            content: data.welcomeMessage
+          }]);
+        }
 
-      if (data.messages && data.messages.length > 0) {
-        const restoredMessages: Message[] = data.messages.map((m: { id: string; role: 'user' | 'assistant'; content: string }) => ({
-          id: m.id || generateMessageId(),
-          role: m.role,
-          content: m.content
-        }));
-        setMessages(restoredMessages);
-      } else {
-        setMessages([{
-          id: generateMessageId(),
-          role: 'assistant',
-          content: data.welcomeMessage
-        }]);
+        if (!data.context.synced) {
+          syncGoogleDocs();
+        }
+      } catch (error) {
+        console.error('Start chat error:', error);
+        toast.error('チャットの開始に失敗しました');
+      } finally {
+        setIsInitializing(false);
       }
+    };
 
-      setIsInitializing(false);
-
-      if (!data.context.synced) {
-        syncGoogleDocs();
-      }
-
-    } catch (error) {
-      console.error('Start chat error:', error);
-      toast.error('チャットの開始に失敗しました');
-      setIsOpen(false);
-      setIsInitializing(false);
-    }
-  };
+    startChat();
+  }, [syncGoogleDocs]);
 
   // 新規セッション開始（履歴クリア）
   const startNewSession = async () => {
@@ -178,6 +178,14 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
     } else {
       toast.error('同期に失敗しました');
     }
+  };
+
+  // チャットを閉じる
+  const handleClose = () => {
+    if (hasUpdates || sessionStatus === 'paused') {
+      onContentUpdated?.();
+    }
+    onClose?.();
   };
 
   // メッセージ送信（ストリーミング対応）
@@ -363,59 +371,10 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
     }
   };
 
-  // チャットを閉じる
-  const closeChat = () => {
-    setIsOpen(false);
-    if (hasUpdates || sessionStatus === 'paused') {
-      onContentUpdated?.();
-    }
-  };
-
-  // 未開始状態のボタン表示
-  if (!isOpen) {
-    return (
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <MessageCircle className="w-5 h-5 text-teal-500" />
-            <h2 className="font-bold text-slate-800 dark:text-white">AIチャット</h2>
-          </div>
-        </div>
-
-        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-          AIと対話しながら健康プロフィールを作成・更新できます
-        </p>
-
-        <button
-          onClick={startChat}
-          disabled={isInitializing}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors font-medium disabled:opacity-50"
-        >
-          {isInitializing ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              準備中...
-            </>
-          ) : (
-            <>
-              <MessageCircle className="w-4 h-4" />
-              チャットを始める
-            </>
-          )}
-        </button>
-
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
-          健康情報の追加・修正・質問ができます
-        </p>
-      </div>
-    );
-  }
-
-  // チャット画面
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-teal-200 dark:border-teal-700 shadow-lg mb-4 overflow-hidden">
+    <div className="flex flex-col h-full">
       {/* ヘッダー */}
-      <div className="bg-teal-500 dark:bg-teal-600 text-white px-4 py-3 flex items-center justify-between">
+      <div className="bg-teal-500 dark:bg-teal-600 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5" />
           <span className="font-bold">AIチャット</span>
@@ -450,7 +409,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
             <RefreshCw className={`w-4 h-4 ${isInitializing ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={closeChat}
+            onClick={handleClose}
             className="p-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors"
           >
             <X className="w-5 h-5" />
@@ -460,7 +419,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
 
       {/* 同期エラーバー */}
       {syncError && (
-        <div className="px-4 py-2 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-700 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+        <div className="px-4 py-2 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-700 text-xs text-red-700 dark:text-red-300 flex items-center gap-2 flex-shrink-0">
           <AlertTriangle className="w-3 h-3" />
           {syncError}
           <button
@@ -474,7 +433,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
 
       {/* 同期状態バー（未同期の場合のみ表示） */}
       {!context?.synced && !isSyncing && !syncError && (
-        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
+        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between flex-shrink-0">
           <span>最新のGoogle Docsデータを読み込んでいません</span>
           <button
             onClick={handleManualSync}
@@ -487,7 +446,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
 
       {/* 同期中バー */}
       {isSyncing && (
-        <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+        <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2 flex-shrink-0">
           <Loader2 className="w-3 h-3 animate-spin" />
           Google Docsからデータを読み込み中...
         </div>
@@ -496,7 +455,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
       {/* メッセージエリア */}
       <div
         ref={messagesContainerRef}
-        className="h-[50vh] min-h-[280px] max-h-[400px] overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-900"
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-900"
       >
         {isInitializing ? (
           <div className="flex items-center justify-center h-full">
@@ -544,7 +503,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
 
       {/* 保留中のアクションがある場合のクイックアクションボタン */}
       {pendingActions.length > 0 && !isLoading && (
-        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-t border-amber-200 dark:border-amber-700 flex items-center justify-center gap-3">
+        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-t border-amber-200 dark:border-amber-700 flex items-center justify-center gap-3 flex-shrink-0">
           <span className="text-xs text-amber-700 dark:text-amber-300">
             確認が必要な更新があります
           </span>
@@ -564,7 +523,7 @@ export default function ChatHearingV2({ onContentUpdated }: ChatHearingV2Props) 
       )}
 
       {/* 入力エリア */}
-      <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}

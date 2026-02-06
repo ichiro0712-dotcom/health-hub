@@ -7,6 +7,140 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import prisma from '@/lib/prisma';
+import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
+
+// ============================================
+// データ状態の検出
+// ============================================
+
+interface DataStatus {
+    profileFilledCount: number;
+    profileTotalCount: number;
+    missingSectionNames: string[];
+    hasRecords: boolean;
+    hasFitbit: boolean;
+    hasGoogleDocs: boolean;
+}
+
+async function detectDataStatus(userId: string): Promise<DataStatus> {
+    const [profileSections, recordCount, fitbitAccount, googleDocsSettings] = await Promise.all([
+        prisma.healthProfileSection.findMany({
+            where: { userId },
+            select: { categoryId: true, content: true }
+        }),
+        prisma.healthRecord.count({ where: { userId } }),
+        prisma.fitbitAccount.findUnique({ where: { userId } }),
+        prisma.googleDocsSettings.findUnique({ where: { userId } }),
+    ]);
+
+    // 実際にcontentが入っているセクションのみカウント
+    const filledSectionIds = new Set(
+        profileSections
+            .filter(s => s.content && s.content.trim().length > 0)
+            .map(s => s.categoryId)
+    );
+
+    const missingSectionNames = DEFAULT_PROFILE_CATEGORIES
+        .filter(cat => !filledSectionIds.has(cat.id))
+        .map(cat => cat.title.replace(/^\d+\.\s*/, '')); // 番号プレフィックスを除去
+
+    return {
+        profileFilledCount: filledSectionIds.size,
+        profileTotalCount: DEFAULT_PROFILE_CATEGORIES.length,
+        missingSectionNames,
+        hasRecords: recordCount > 0,
+        hasFitbit: !!fitbitAccount,
+        hasGoogleDocs: !!googleDocsSettings,
+    };
+}
+
+// ============================================
+// ウェルカムメッセージの動的生成
+// ============================================
+
+function buildWelcomeMessage(status: DataStatus): string {
+    const lines: string[] = [];
+    let choiceNum = 1;
+
+    // 固定: あいさつ + できること
+    lines.push('こんにちは！Health Hubアシスタントです。');
+    lines.push('');
+    lines.push('私はあなたの健康データの管理をお手伝いします。');
+    lines.push('できることは以下です！');
+    lines.push('');
+    lines.push(`${toFullWidth(choiceNum++)}．健康プロフィールの${status.profileFilledCount > 0 ? '更新' : '作成・更新'}`);
+    lines.push(`${toFullWidth(choiceNum++)}．健康診断の結果や記録データの分析・アドバイス`);
+    lines.push(`${toFullWidth(choiceNum++)}．Health Hubの使い方サポート`);
+
+    // 動的: データ不足の提案
+    const hasProfileGap = status.profileFilledCount < status.profileTotalCount;
+    const needsDataInput = !status.hasRecords || hasProfileGap;
+
+    if (needsDataInput) {
+        lines.push('');
+        if (!status.hasRecords && status.profileFilledCount === 0) {
+            lines.push('まだデータが入っていないようですね。');
+            lines.push('まずはデータの入力から始めませんか？');
+        } else if (!status.hasRecords) {
+            lines.push('健康診断の記録がまだ登録されていないようです。');
+        } else if (hasProfileGap) {
+            // 未入力セクション名を最大3つ表示
+            const examples = status.missingSectionNames.slice(0, 3).join('、');
+            const suffix = status.missingSectionNames.length > 3 ? 'など' : '';
+            lines.push(`健康プロフィールにまだ入力されていない項目があります（${examples}${suffix}）。`);
+        }
+
+        lines.push('');
+        if (!status.hasRecords) {
+            lines.push(`${toFullWidth(choiceNum++)}．健康診断・医療データについて教える`);
+        }
+        if (hasProfileGap) {
+            lines.push(`${toFullWidth(choiceNum++)}．健康プロフィールを${status.profileFilledCount === 0 ? '作成する' : '充実させる'}`);
+        }
+    }
+
+    // 動的: 連携未設定の提案
+    const hasIntegrationGap = !status.hasFitbit || !status.hasGoogleDocs;
+
+    if (hasIntegrationGap) {
+        lines.push('');
+        lines.push('Health Hubではスマートウォッチやお持ちのAIとの連携もできます。');
+        if (!status.hasFitbit && !status.hasGoogleDocs) {
+            lines.push('まだ連携していないものがあるようです。');
+        }
+
+        lines.push('');
+        if (!status.hasFitbit) {
+            lines.push(`${toFullWidth(choiceNum++)}．スマートウォッチ・スマホとの連携`);
+        }
+        if (!status.hasGoogleDocs) {
+            lines.push(`${toFullWidth(choiceNum++)}．Gemini・ChatGPTへの健康データ連携`);
+        }
+    }
+
+    lines.push('');
+    lines.push('何から始めますか？番号でもお気軽にどうぞ！');
+
+    return lines.join('\n');
+}
+
+function buildResumeMessage(): string {
+    return `お帰りなさい！
+
+前回の続きから再開しますか？それとも別のことをしますか？
+
+１．前回の続きから
+２．別のことをする`;
+}
+
+function toFullWidth(num: number): string {
+    const fullWidthDigits = ['０', '１', '２', '３', '４', '５', '６', '７', '８', '９'];
+    return String(num).split('').map(d => fullWidthDigits[parseInt(d)]).join('');
+}
+
+// ============================================
+// GET: セッション取得/新規作成
+// ============================================
 
 export async function GET(req: NextRequest) {
     try {
@@ -39,40 +173,19 @@ export async function GET(req: NextRequest) {
             }
         });
 
-        // DBからプロフィールセクション数をチェック（高速）
-        const profileSectionCount = await prisma.healthProfileSection.count({
-            where: { userId: user.id }
-        });
-        const hasProfile = profileSectionCount > 0;
+        // データ状態を検出
+        const dataStatus = await detectDataStatus(user.id);
+        const hasProfile = dataStatus.profileFilledCount > 0;
 
         // ウェルカムメッセージを生成
         let welcomeMessage: string;
 
         if (session && session.messages.length > 0) {
             // 既存セッションを再開
-            welcomeMessage = session.status === 'paused'
-                ? 'お帰りなさい！前回の続きから再開しましょう。何か話したいことはありますか？'
-                : '続きをお話しください。';
+            welcomeMessage = buildResumeMessage();
         } else {
             // 新規セッション
-            if (hasProfile) {
-                welcomeMessage = `こんにちは！健康プロフィールを拝見しました。
-
-プロフィールの更新や、健康に関するご相談がありましたらお気軽にどうぞ。
-例えば：
-・「最近の生活習慣の変化」を教えていただく
-・「プロフィールの○○を修正したい」
-・「健康診断の結果について相談したい」
-
-何でもお話しください！`;
-            } else {
-                welcomeMessage = `はじめまして！健康プロフィールを作成するお手伝いをします。
-
-まずは簡単なところから始めましょう。
-生年月日や身長・体重など、基本的な情報から教えていただけますか？
-
-もちろん、話しやすい内容からで構いません！`;
-            }
+            welcomeMessage = buildWelcomeMessage(dataStatus);
 
             // 新規セッションを作成
             session = await prisma.healthChatSession.create({
@@ -107,8 +220,10 @@ export async function GET(req: NextRequest) {
             })),
             context: {
                 hasProfile,
-                hasRecords: false,  // 同期時に確認
-                profileSummary: hasProfile ? 'プロフィールあり' : null,
+                hasRecords: dataStatus.hasRecords,
+                profileSummary: hasProfile
+                    ? `${dataStatus.profileFilledCount}/${dataStatus.profileTotalCount}セクション入力済み`
+                    : null,
                 synced: false  // まだ同期していない
             }
         });

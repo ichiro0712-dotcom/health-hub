@@ -1,13 +1,20 @@
-# 健康プロフィール AIチャット 新アーキテクチャ設計
+# 健康プロフィール AIチャット v2 アーキテクチャ設計
 
-## 現状の問題点
+## v1からの変更点（サマリー）
 
-1. **重複質問**: 既存プロフィールに回答済みの内容を再度質問する
-2. **重複情報**: プロフィールに同じ項目が複数回記載されても検出・解決しない
-3. **コンテキスト不足**: AIがプロフィール全体を把握していない
-4. **質問駆動の限界**: 固定質問リストに縛られ、柔軟な対話ができない
+v1（CHAT_HEARING_SPEC.md）は固定質問リスト＋進捗管理方式。v2では以下に刷新:
 
-## 新アーキテクチャ: "Google Docs Truth Source" モデル
+- 固定質問リスト → AIが自律的に対話
+- HealthQuestionProgress テーブル不要
+- Google Docsを Single Source of Truth として活用
+- ストリーミング応答（SSE）対応
+- 健康データの分析・アドバイス機能を追加
+- 動的ウェルカムメッセージ（データ状態検出）
+- FAQ/使い方サポート機能を内蔵
+
+---
+
+## アーキテクチャ: "Google Docs Truth Source" モデル
 
 ### 核心的な変更
 
@@ -21,7 +28,7 @@
 │  │ (HEALTH_PROFILE) │  │   (RECORDS)      │                   │
 │  └─────────────────┘  └─────────────────┘                   │
 │            ↓                    ↓                            │
-│         READ (チャット開始時)                                │
+│         READ (チャット開始時 / 手動同期時)                   │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -32,6 +39,8 @@
 │  2. AIが自律的に「何が不足か」を判断                         │
 │  3. 構造化出力で精密なプロフィール更新                       │
 │  4. 重複検出・解決をAIが実行                                 │
+│  5. 健康データの分析・アドバイスを提供                       │
+│  6. Health Hubの使い方をFAQ情報から回答                      │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -45,324 +54,353 @@
 
 ---
 
-## 新しいシステムプロンプト設計
+## AIの3つの役割
 
-### Phase 1: コンテキスト構築
+### 1. プロフィールの構築・改善
+- ユーザーとの対話から健康情報を聞き取り
+- 適切なセクション（11カテゴリ）に情報を追加・更新・削除
+- 重複・矛盾・古い情報の検出と解決提案
 
-チャット開始時に以下を取得:
+### 2. 健康データの分析・アドバイス
+- プロフィールや診断記録データを読み取り、傾向や気になる点を指摘
+- 数値の経年変化や基準値との比較
+- 生活改善のアドバイスを提供
+
+### 3. Health Hubの使い方サポート
+- システムプロンプトに埋め込まれたFAQ情報をもとに回答
+- 連携設定などは該当する設定ページへ誘導（チャット内で完結させない）
+- `/help` ページも別途用意
+
+---
+
+## セッション管理とウェルカムメッセージ
+
+### データ状態検出
+
+セッション開始時（`GET /api/health-chat/v2/session`）に以下を並列取得:
+
+```typescript
+interface DataStatus {
+    profileFilledCount: number;      // 入力済みプロフィールセクション数
+    profileTotalCount: number;       // 全セクション数（11）
+    missingSectionNames: string[];   // 未入力セクション名リスト
+    hasRecords: boolean;             // 診断記録の有無
+    hasFitbit: boolean;              // Fitbit連携の有無
+    hasGoogleDocs: boolean;          // Google Docs連携の有無
+}
+```
+
+### 動的ウェルカムメッセージ
+
+ユーザーのデータ状態に応じて、以下の構成で番号付き選択肢を動的生成:
+
+**固定ブロック（常に表示）:**
+- あいさつ
+- ①健康プロフィールの作成・更新
+- ②健康データの分析・アドバイス
+- ③Health Hubの使い方サポート
+
+**データ不足ブロック（条件付き表示）:**
+- 健康診断記録なし → 「④健康診断・医療データについて教える」
+- プロフィール未入力あり → 「⑤健康プロフィールを充実させる」
+
+**連携未設定ブロック（条件付き表示）:**
+- Fitbit未連携 → 「⑥スマートウォッチ・スマホとの連携」
+- Google Docs未連携 → 「⑦Gemini・ChatGPTへの健康データ連携」
+
+### セッション再開
+
+既存セッション（メッセージあり）を再開する場合:
+```
+お帰りなさい！
+
+前回の続きから再開しますか？それとも別のことをしますか？
+
+１．前回の続きから
+２．別のことをする
+```
+
+### 番号選択への対応
+
+- 半角「1」、全角「１」、対応する言葉のいずれでも受け付け
+- システムプロンプトに番号→トピックのマッピングを記載
+
+---
+
+## システムプロンプト設計
+
+### コンテキスト構築
+
+チャット開始時に以下を取得（Google Docs同期は手動ボタンで実行）:
 - Google Docsから健康プロフィール全文（READ）
 - Google Docsから診断記録全文（READ）
-- DBから習慣データサマリー
-- DBからスマホデータサマリー
 
-### Phase 2: AIへの指示（新システムプロンプト）
+### システムプロンプト構成
 
 ```markdown
-あなたは健康プロフィールの構築・改善を支援するAIアシスタントです。
+あなたはHealth Hubの健康プロフィール構築・改善・分析を支援するAIアシスタントです。
 
 ## あなたが持っている情報
 
-### 現在の健康プロフィール
-{FULL_PROFILE_FROM_GOOGLE_DOCS}
+### 現在の健康プロフィール（Google Docsから読み込み）
+{PROFILE_CONTENT}
 
-### 診断記録データ
-{RECORDS_SUMMARY}
+### 診断記録データ（Google Docsから読み込み）
+{RECORDS_CONTENT（最大8000文字）}
 
-### 習慣・デバイスデータ
-{HABITS_AND_DEVICE_DATA}
+## 利用可能なセクションID
+  basic_attributes（1. 基本属性・バイオメトリクス）
+  genetics（2. 遺伝・家族歴）
+  ...全11セクション
 
 ## あなたの役割
 
-1. **ユーザーの意図を理解する**
-   - 情報を追加したい
-   - 情報を修正・削除したい
-   - 質問に答えてほしい
-   - プロフィールを充実させたい
+1. **プロフィールの構築・改善**: ユーザーとの対話から健康情報を聞き取り、プロフィールに追加・更新・削除する
+2. **健康データの分析・アドバイス**: プロフィールや診断記録データを読み取り、傾向の指摘・生活改善のアドバイスを提供する
+3. **Health Hubの使い方サポート**: FAQ情報をもとにアプリの機能や使い方について回答する
+4. **自然な対話**: ユーザーの話の流れに沿って深掘りし、適切なタイミングで関連質問をする
 
-2. **プロフィールの改善提案**
-   - 不足している重要な情報を特定
-   - 古くなった情報を検出
-   - 重複・矛盾を発見して解決提案
+## ウェルカムメッセージの番号選択への対応
 
-3. **自然な対話**
-   - 固定の質問リストに縛られない
-   - ユーザーの話の流れに沿って深掘り
-   - 適切なタイミングで関連質問
+（ユーザーが数字や言葉で選択肢を選べるように対応）
 
-## 出力形式
+## 設定ページへの誘導
 
-ユーザーへの応答と、プロフィール更新アクションを分離して出力してください。
+連携や設定に関する質問には、チャット内で設定を完結させず設定ページへ誘導:
+- Fitbit連携 → /settings/fitbit
+- Google Docs連携 → /settings/google-docs
+- スマホデータ連携 → /settings/data-sync
+- 検査項目の設定 → /profile/settings/items
 
-### 応答テキスト
-ユーザーに表示するメッセージ（自然な日本語）
+## Health Hub FAQ情報
 
-### プロフィール更新アクション（JSON）
-<!--PROFILE_ACTION
-{
-  "actions": [
-    {
-      "type": "ADD" | "UPDATE" | "DELETE" | "NONE",
-      "section_id": "セクションID",
-      "target_text": "更新対象のテキスト（UPDATE/DELETEの場合）",
-      "new_text": "新しいテキスト（ADD/UPDATEの場合）",
-      "reason": "変更理由",
-      "confidence": 0.0-1.0
-    }
-  ],
-  "detected_issues": [
-    {
-      "type": "DUPLICATE" | "CONFLICT" | "OUTDATED",
-      "description": "問題の説明",
-      "suggested_resolution": "解決案"
-    }
-  ],
-  "follow_up_topic": "次に聞くべきトピック（あれば）"
-}
-PROFILE_ACTION-->
+（主な機能、データ連携、データ入力方法を記載）
 
 ## 重要なルール
 
-1. **プロフィールに既に書いてあることは質問しない**
-2. **重複を見つけたら統合を提案する**
-3. **診断記録と矛盾する情報を見つけたら確認する**
-4. **confidence < 0.7 の更新は確認を求める**
-5. **ユーザーが「保存して」と言ったらアクションを実行**
+1. 既存情報の尊重: プロフィールに既に書いてあることは再度質問しない
+2. 確認が必要: confidence < 0.8 の更新は実行前に確認を求める
+3. 削除は慎重に: confidence 0.95以上でないと自動実行しない
+4. 必ず質問を含める: 終了希望以外は必ず1つ質問を含める
+
+## 出力形式
+
+応答テキストの後に、PROFILE_ACTION JSONブロックを出力
 ```
 
 ---
 
 ## API設計
 
-### POST /api/health-chat/v2
+### GET /api/health-chat/v2/session
 
-#### リクエスト
+セッション取得/新規作成（高速・楽観的）
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "sessionId": "uuid",
+  "status": "active",
+  "welcomeMessage": "（動的生成されたウェルカムメッセージ）",
+  "messages": [],
+  "context": {
+    "hasProfile": true,
+    "hasRecords": false,
+    "profileSummary": "5/11セクション入力済み",
+    "synced": false
+  }
+}
+```
+
+### POST /api/health-chat/v2/session
+
+Google Docsデータを手動同期
+
+### DELETE /api/health-chat/v2/session
+
+セッションをクリア（新規セッション開始用）
+
+### POST /api/health-chat/v2/stream
+
+**ストリーミング応答（メインAPI）**
+
+Server-Sent Events (SSE) を使用してリアルタイムで応答を返す。
+
+**リクエスト:**
 ```json
 {
   "message": "ユーザーのメッセージ",
-  "sessionId": "セッションID（省略時は新規作成）"
+  "sessionId": "セッションID"
 }
 ```
 
-#### 処理フロー
+**処理フロー:**
+1. 認証チェック・レート制限
+2. Google Docsからコンテキスト読み込み
+3. 会話履歴取得（最大20件、超過分はサマリー化）
+4. Gemini 2.0 Flash にストリーミングリクエスト
+5. SSEでリアルタイム応答（PROFILE_ACTIONブロックはフィルタリング）
+6. 応答完了後、PROFILE_ACTIONを解析
+7. confidence ≥ 0.8 のアクションを自動実行（DELETEは 0.95以上）
+8. 低confidence のアクションはpendingActionsとして返却
+9. メッセージ保存・Google Docs同期
 
-```typescript
-async function handleChatV2(message: string, sessionId?: string) {
-  // 1. セッション取得または作成
-  const session = await getOrCreateSession(sessionId);
-
-  // 2. コンテキスト構築（初回のみ or 5分以上経過時）
-  let context = session.cachedContext;
-  if (!context || isStale(session.contextCachedAt, 5 * 60 * 1000)) {
-    context = await buildFullContext(userId);
-    await cacheContext(session.id, context);
-  }
-
-  // 3. 会話履歴取得
-  const history = await getConversationHistory(session.id);
-
-  // 4. システムプロンプト構築
-  const systemPrompt = buildSystemPromptV2(context);
-
-  // 5. AI呼び出し（Gemini 2.0 Flash）
-  const aiResponse = await callGeminiWithStructuredOutput(
-    systemPrompt,
-    history,
-    message
-  );
-
-  // 6. レスポンス解析
-  const { responseText, profileAction } = parseAIResponse(aiResponse);
-
-  // 7. 高信頼度のアクションは即座に実行
-  const executedActions = [];
-  for (const action of profileAction.actions) {
-    if (action.confidence >= 0.9 || action.type === 'NONE') {
-      await executeProfileAction(userId, action);
-      executedActions.push(action);
-    }
-  }
-
-  // 8. 問題検出をユーザーに報告
-  let finalResponse = responseText;
-  if (profileAction.detected_issues.length > 0) {
-    finalResponse += formatIssuesForUser(profileAction.detected_issues);
-  }
-
-  // 9. メッセージ保存
-  await saveMessages(session.id, message, finalResponse);
-
-  // 10. Google Docs同期（バックグラウンド）
-  if (executedActions.length > 0) {
-    syncToGoogleDocsAsync(userId);
-  }
-
-  return {
-    response: finalResponse,
-    sessionId: session.id,
-    executedActions,
-    pendingActions: profileAction.actions.filter(a => a.confidence < 0.9)
-  };
-}
+**SSEデータ形式:**
 ```
+data: {"text": "応答テキストの一部"}
+data: {"text": "続きのテキスト..."}
+...
+data: {"done": true, "executedActions": [...], "pendingActions": [...]}
+```
+
+### POST /api/health-chat/v2
+
+**非ストリーミング応答（フォールバック）**
+
+ストリーミングと同じ処理を同期的に実行し、JSON一括レスポンスを返す。
 
 ---
 
-## コンテキスト構築
+## 構造化出力
 
-### buildFullContext()
+### PROFILE_ACTION フォーマット
 
-```typescript
-async function buildFullContext(userId: string): Promise<FullContext> {
-  // 並列取得
-  const [
-    profileFromDocs,
-    recordsFromDocs,
-    habitsFromDB,
-    smartphoneFromDB
-  ] = await Promise.all([
-    readHealthProfileFromGoogleDocs(),      // 新規実装
-    readRecordsFromGoogleDocs(),            // 新規実装
-    getHabitsSummary(userId),
-    getSmartphoneDataSummary(userId)
-  ]);
-
-  return {
-    profile: profileFromDocs,
-    records: recordsFromDocs,
-    habits: habitsFromDB,
-    smartphone: smartphoneFromDB,
-    fetchedAt: new Date()
-  };
-}
 ```
-
-### Google Docsからの読み取り（新規実装）
-
-```typescript
-// src/lib/google-docs.ts に追加
-
-export async function readHealthProfileFromGoogleDocs(): Promise<string> {
-  const docs = getDocsClient();
-  const doc = await docs.documents.get({ documentId: HEALTH_PROFILE_DOC_ID });
-
-  // ドキュメントの全テキストを抽出
-  let text = '';
-  const content = doc.data.body?.content || [];
-  for (const element of content) {
-    if (element.paragraph?.elements) {
-      for (const e of element.paragraph.elements) {
-        if (e.textRun?.content) {
-          text += e.textRun.content;
-        }
-      }
-    }
-  }
-
-  return text;
-}
-
-export async function readRecordsFromGoogleDocs(): Promise<string> {
-  const docs = getDocsClient();
-  const doc = await docs.documents.get({ documentId: RECORDS_DOC_ID });
-
-  // 同様にテキスト抽出
-  // ...
-
-  return text;
-}
-```
-
----
-
-## 構造化出力（Gemini 2.0 Flash）
-
-```typescript
-async function callGeminiWithStructuredOutput(
-  systemPrompt: string,
-  history: Message[],
-  userMessage: string
-): Promise<string> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_API_KEY}`,
+<!--PROFILE_ACTION
+{
+  "actions": [
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [
-          ...history.map(m => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }]
-          })),
-          { role: 'user', parts: [{ text: userMessage }] }
-        ],
-        generationConfig: {
-          temperature: 0.3,  // 情報抽出は低め
-          maxOutputTokens: 4096,
-        }
-      })
+      "type": "ADD" | "UPDATE" | "DELETE" | "NONE",
+      "section_id": "セクションID",
+      "target_text": "更新/削除対象テキスト",
+      "new_text": "追加/更新後テキスト",
+      "reason": "変更理由",
+      "confidence": 0.0-1.0
     }
-  );
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  ],
+  "detected_issues": [
+    {
+      "type": "DUPLICATE" | "CONFLICT" | "OUTDATED" | "MISSING",
+      "description": "問題の説明",
+      "suggested_resolution": "解決案"
+    }
+  ],
+  "follow_up_topic": "次に聞くと良いトピック"
 }
+PROFILE_ACTION-->
+```
+
+### ストリーミング時のPROFILE_ACTIONフィルタリング
+
+SSEストリーミング中、PROFILE_ACTIONブロックがチャンク境界で分割される問題に対応:
+- `insideProfileAction` フラグで状態管理
+- `pendingBuffer` で部分的な `<!--` マーカーを保持
+- チャンク単位の正規表現ではなく、ステートマシン方式で確実にフィルタリング
+
+---
+
+## セキュリティ対策
+
+### レート制限
+- インメモリ実装（本番はRedis推奨）
+- 1分間に20リクエストまで
+
+### プロンプトインジェクション対策
+```typescript
+function sanitizeUserInput(input: string): string {
+    return input
+        .replace(/<!--[\s\S]*?-->/g, '')        // HTMLコメント
+        .replace(/PROFILE_ACTION/gi, '')         // 特殊マーカー
+        .replace(/EXTRACTED_DATA/gi, '')
+        .replace(/システムプロンプト/gi, '')
+        .replace(/system\s*prompt/gi, '')
+        .replace(/ignore\s*(all|previous)\s*(instructions?)?/gi, '')
+        .trim();
+}
+```
+
+### その他
+- Google Docs APIの認証はサービスアカウント経由（既存）
+- ユーザーごとのデータ分離はDB側で担保
+- センシティブデータのログ出力は最小限
+- 医療免責事項はGemini自体のポリシーに委任
+
+---
+
+## 実装ファイル構成
+
+```
+src/
+├── app/
+│   ├── api/
+│   │   └── health-chat/
+│   │       └── v2/
+│   │           ├── route.ts           # 非ストリーミングAPI
+│   │           ├── stream/route.ts    # ストリーミングAPI（メイン）
+│   │           └── session/route.ts   # セッション管理API
+│   ├── help/
+│   │   └── page.tsx                   # FAQ/ヘルプページ
+│   └── health-profile/
+│       └── page.tsx                   # 健康プロフページ
+├── components/
+│   └── health-profile/
+│       └── ChatHearingV2.tsx          # チャットUIコンポーネント
+├── constants/
+│   └── health-profile.ts             # 11カテゴリ定義
+└── lib/
+    ├── google-docs.ts                 # Google Docs読み書き
+    └── prisma.ts                      # Prismaクライアント
 ```
 
 ---
 
-## 重複検出・解決ロジック
+## データベース設計（v2で使用）
 
-AIが検出した問題に対する処理:
+### HealthChatSession
+```
+id: UUID
+userId: UUID (FK → User)
+status: 'active' | 'paused' | 'completed'
+currentPriority: Int
+createdAt: DateTime
+updatedAt: DateTime
+```
 
-```typescript
-interface DetectedIssue {
-  type: 'DUPLICATE' | 'CONFLICT' | 'OUTDATED';
-  description: string;
-  suggested_resolution: string;
-}
-
-function formatIssuesForUser(issues: DetectedIssue[]): string {
-  if (issues.length === 0) return '';
-
-  let message = '\n\n---\n**プロフィールの改善提案**:\n';
-
-  for (const issue of issues) {
-    switch (issue.type) {
-      case 'DUPLICATE':
-        message += `- 重複を発見: ${issue.description}\n  → ${issue.suggested_resolution}\n`;
-        break;
-      case 'CONFLICT':
-        message += `- 矛盾を発見: ${issue.description}\n  → ${issue.suggested_resolution}\n`;
-        break;
-      case 'OUTDATED':
-        message += `- 古い情報の可能性: ${issue.description}\n  → ${issue.suggested_resolution}\n`;
-        break;
-    }
-  }
-
-  message += '\n「修正して」と言っていただければ対応します。';
-  return message;
-}
+### HealthChatMessage
+```
+id: UUID
+sessionId: UUID (FK → HealthChatSession)
+role: 'user' | 'assistant'
+content: Text
+createdAt: DateTime
 ```
 
 ---
 
 ## 移行計画
 
-### Phase 1: 基盤（今回実装）
+### Phase 1: 基盤 ✅
 1. Google Docsからの読み取り機能
 2. 新しいシステムプロンプト
-3. 構造化出力の解析
-4. 基本的なアクション実行
+3. 構造化出力（PROFILE_ACTION）の解析
+4. 基本的なアクション実行（ADD/UPDATE/DELETE）
+5. ストリーミング応答（SSE）
 
-### Phase 2: 改善（次回以降）
+### Phase 2: UX改善 ✅
+1. 動的ウェルカムメッセージ（データ状態検出）
+2. 番号選択対応
+3. 健康データの分析・アドバイス機能
+4. FAQ/使い方サポート機能（システムプロンプト内蔵 + /help ページ）
+5. 設定ページへの誘導
+6. セッション再開フロー
+
+### Phase 3: 改善（次回以降）
 1. コンテキストキャッシング最適化
 2. 重複検出アルゴリズムの精緻化
 3. ユーザーフィードバックループ
-4. 質問進捗システムの再設計（オプショナル化）
 
-### Phase 3: 高度化（将来）
+### Phase 4: 高度化（将来）
 1. Gemini 2.5への移行
 2. 外部データの自動統合
 3. 予測的な健康提案
@@ -371,18 +409,14 @@ function formatIssuesForUser(issues: DetectedIssue[]): string {
 
 ## 期待される改善効果
 
-| 問題 | 現状 | 新アーキテクチャ |
-|------|------|------------------|
+| 問題 | v1 | v2 |
+|------|-----|-----|
 | 重複質問 | 頻発 | プロフィール全文を参照するため発生しない |
 | 重複情報 | 放置 | AI が検出して解決を提案 |
 | 古い情報 | 放置 | 診断記録と比較して検出 |
 | 固定質問 | 硬直的 | AI が状況に応じて柔軟に対話 |
 | コンテキスト | 断片的 | 全情報を把握して回答 |
-
----
-
-## セキュリティ考慮事項
-
-- Google Docs APIの認証はサービスアカウント経由（既存）
-- ユーザーごとのデータ分離はDB側で担保
-- センシティブデータのログ出力は最小限に
+| 健康分析 | なし | データに基づく分析・アドバイス |
+| 使い方サポート | なし | FAQ情報をもとにチャット内で回答 |
+| リアルタイム性 | 一括応答 | SSEストリーミング |
+| ウェルカム | 固定 | データ状態に応じて動的生成 |
