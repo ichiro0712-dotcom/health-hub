@@ -31,6 +31,8 @@ export interface PromptContext {
     answeredQuestionIds?: string[];
     currentQuestionId?: string | null;
     currentPriority?: number;
+    // ヒアリングエージェント用（profile_buildingモード時に使用）
+    hearingInput?: import('@/lib/agents/types').HearingAgentInput;
 }
 
 export interface ProfileAction {
@@ -133,6 +135,12 @@ export function buildSystemPrompt(context: PromptContext): string {
 
     switch (context.mode) {
         case 'profile_building':
+            // ヒアリングエージェント用のinputがあれば、集中型プロンプトを使用
+            if (context.hearingInput) {
+                const { buildHearingSystemPrompt } = require('@/lib/agents/hearing-agent');
+                return buildHearingSystemPrompt(context.hearingInput);
+            }
+            // フォールバック: 従来のモノリシックプロンプト
             return base + buildProfileBuildingPrompt(
                 context.profileContent,
                 context.answeredQuestionIds || [],

@@ -35,6 +35,13 @@ interface ProfileAction {
   confidence: number;
 }
 
+interface ProfileIssue {
+  type: 'DUPLICATE' | 'CONFLICT' | 'OUTDATED';
+  sectionId: string;
+  description: string;
+  suggestedFix: string;
+}
+
 interface SessionContext {
   hasProfile: boolean;
   hasRecords: boolean;
@@ -96,6 +103,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
   const [pendingActions, setPendingActions] = useState<ProfileAction[]>([]);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [chatMode, setChatMode] = useState<string | null>(null);
+  const [analyzerIssues, setAnalyzerIssues] = useState<ProfileIssue[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -155,6 +163,11 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         setContext(data.context);
         if (data.mode) setChatMode(data.mode);
 
+        // アナライザー結果（重複・矛盾の検出）
+        if (data.analyzerResult?.issues?.length > 0) {
+          setAnalyzerIssues(data.analyzerResult.issues);
+        }
+
         if (data.messages && data.messages.length > 0) {
           const restoredMessages: Message[] = data.messages.map((m: { id: string; role: 'user' | 'assistant'; content: string }) => ({
             id: m.id || generateMessageId(),
@@ -204,6 +217,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
       setSessionStatus('active');
       setContext(data.context);
       setChatMode(data.mode || null);
+      setAnalyzerIssues(data.analyzerResult?.issues || []);
       setMessages([{
         id: generateMessageId(),
         role: 'assistant',
@@ -527,6 +541,29 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2 flex-shrink-0">
           <Loader2 className="w-3 h-3 animate-spin" />
           Google Docsからデータを読み込み中...
+        </div>
+      )}
+
+      {/* プロフィール重複・矛盾の検出結果 */}
+      {analyzerIssues.length > 0 && (
+        <div className="px-4 py-2 bg-orange-50 dark:bg-orange-900/30 border-b border-orange-200 dark:border-orange-700 flex-shrink-0">
+          <p className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-1">
+            プロフィールに整理が必要な箇所があります:
+          </p>
+          <ul className="text-xs text-orange-600 dark:text-orange-400 space-y-0.5 ml-3">
+            {analyzerIssues.map((issue, i) => (
+              <li key={i}>
+                {issue.type === 'DUPLICATE' ? '📋' : issue.type === 'CONFLICT' ? '⚠️' : '🕐'}{' '}
+                {issue.description}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={() => setAnalyzerIssues([])}
+            className="mt-1 text-[10px] text-orange-500 dark:text-orange-400 hover:underline"
+          >
+            閉じる
+          </button>
         </div>
       )}
 

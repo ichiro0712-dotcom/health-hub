@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import prisma from '@/lib/prisma';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
+import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import {
     readHealthProfileFromGoogleDocs,
     readRecordsFromGoogleDocs,
@@ -33,6 +34,9 @@ import {
     CONFIDENCE_THRESHOLD_DEFAULT,
     CONFIDENCE_THRESHOLD_DELETE,
 } from '@/lib/chat-prompts';
+import { buildHearingSystemPrompt, parseExtractedData } from '@/lib/agents/hearing-agent';
+import { generateProfileActions } from '@/lib/agents/profile-editor';
+import type { HearingAgentInput } from '@/lib/agents/types';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
@@ -166,30 +170,6 @@ function parseAIResponse(response: string): ParsedAIResponse {
     }
 
     return { responseText, actions, detectedIssues, followUpTopic, answeredQuestionId };
-}
-
-// ============================================
-// 検出された問題をユーザーフレンドリーに整形
-// ============================================
-
-function formatIssuesForUser(issues: DetectedIssue[]): string {
-    if (issues.length === 0) return '';
-
-    let message = '\n\n---\n**プロフィールの改善提案**:\n';
-
-    for (const issue of issues) {
-        const icon = {
-            DUPLICATE: '📋',
-            CONFLICT: '⚠️',
-            OUTDATED: '🕐',
-            MISSING: '📝'
-        }[issue.type];
-
-        message += `${icon} ${issue.description}\n   → ${issue.suggested_resolution}\n`;
-    }
-
-    message += '\n「修正して」「統合して」などと言っていただければ対応します。';
-    return message;
 }
 
 // ============================================
@@ -429,18 +409,71 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // モードに応じてGoogle Docsからコンテキストを取得
+        // モードに応じてコンテキストを取得し、システムプロンプトを生成
         let profileContent = '';
         let recordsContent = '';
-        let answeredQuestionIds: string[] = [];
+        let systemPrompt = '';
+        const isProfileBuilding = currentMode === 'profile_building';
 
-        if (currentMode === 'profile_building') {
-            const [profileResult, answeredIds] = await Promise.all([
-                readHealthProfileFromGoogleDocs(),
-                getAnsweredQuestionIds(user.id)
-            ]);
+        if (isProfileBuilding) {
+            // プロフィール構築: ヒアリングエージェントのプロンプトを構築
+            const profileResult = await readHealthProfileFromGoogleDocs();
             profileContent = profileResult.success ? profileResult.content || '' : '';
-            answeredQuestionIds = answeredIds;
+
+            const answeredIds = await getAnsweredQuestionIds(user.id);
+            const currentPriority = (session.currentPriority || 3) as 3 | 2 | 1;
+
+            // 現在の質問を取得
+            let currentQuestion = session.currentQuestionId
+                ? HEALTH_QUESTIONS.find(q => q.id === session.currentQuestionId)
+                : null;
+
+            if (!currentQuestion || answeredIds.includes(currentQuestion.id)) {
+                currentQuestion = getNextQuestion(answeredIds, currentPriority) || null;
+            }
+
+            if (currentQuestion) {
+                // 該当セクションの既存情報のみ抽出
+                const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(
+                    c => c.id === currentQuestion.sectionId
+                )?.title || '';
+
+                let sectionContent = '';
+                if (profileContent) {
+                    const regex = new RegExp(
+                        `【[^】]*${sectionTitle.replace(/^\d+\.\s*/, '').substring(0, 4)}[^】]*】\\s*([\\s\\S]*?)(?=【|$)`
+                    );
+                    const match = profileContent.match(regex);
+                    if (match && match[1]) {
+                        sectionContent = match[1].trim();
+                    }
+                }
+
+                const messageCount = session.messages.filter(m => m.role === 'user').length;
+                const rawHistory = session.messages.map(m => ({ role: m.role, content: m.content }));
+
+                const hearingInput: HearingAgentInput = {
+                    currentQuestion: {
+                        id: currentQuestion.id,
+                        question: currentQuestion.question,
+                        sectionId: currentQuestion.sectionId,
+                        intent: currentQuestion.intent,
+                        extractionHints: currentQuestion.extractionHints,
+                    },
+                    existingSectionContent: sectionContent,
+                    conversationHistory: summarizeHistory(rawHistory),
+                    isFirstQuestion: messageCount === 0,
+                };
+
+                systemPrompt = buildHearingSystemPrompt(hearingInput);
+            } else {
+                // 質問が尽きた場合
+                systemPrompt = buildSystemPrompt({
+                    mode: currentMode,
+                    profileContent,
+                    recordsContent: '',
+                });
+            }
         } else if (currentMode === 'data_analysis') {
             const [profileResult, recordsResult] = await Promise.all([
                 readHealthProfileFromGoogleDocs(),
@@ -448,8 +481,19 @@ export async function POST(req: NextRequest) {
             ]);
             profileContent = profileResult.success ? profileResult.content || '' : '';
             recordsContent = recordsResult.success ? recordsResult.content || '' : '';
+            systemPrompt = buildSystemPrompt({
+                mode: currentMode,
+                profileContent,
+                recordsContent,
+            });
+        } else {
+            // help モード
+            systemPrompt = buildSystemPrompt({
+                mode: currentMode,
+                profileContent: '',
+                recordsContent: '',
+            });
         }
-        // help モードではGoogle Docs読み込み不要
 
         // 会話履歴を構築（サマリー化対応）
         const rawHistory = session.messages.map(m => ({
@@ -457,16 +501,6 @@ export async function POST(req: NextRequest) {
             content: m.content
         }));
         const history = summarizeHistory(rawHistory);
-
-        // モード別システムプロンプト生成
-        const systemPrompt = buildSystemPrompt({
-            mode: currentMode,
-            profileContent,
-            recordsContent,
-            answeredQuestionIds,
-            currentQuestionId: session.currentQuestionId,
-            currentPriority: session.currentPriority,
-        });
 
         // AI呼び出し
         const aiResponse = await callGeminiAPI(systemPrompt, history, userMessage);
@@ -482,51 +516,73 @@ export async function POST(req: NextRequest) {
             updatedMode = newMode;
         }
 
-        // レスポンス解析
-        const { responseText, actions, detectedIssues, followUpTopic, answeredQuestionId } = parseAIResponse(aiResponse);
-
-        // プロフィール構築モードのみアクションを処理
+        // アクション処理
         const executedActions: ProfileAction[] = [];
         const pendingActions: ProfileAction[] = [];
+        const detectedIssues: DetectedIssue[] = [];
+        let followUpTopic: string | undefined;
 
-        if (currentMode === 'profile_building') {
-            for (const action of actions) {
-                if (action.type === 'NONE') continue;
+        if (isProfileBuilding) {
+            // 3エージェントパイプライン: EXTRACTED_DATAをパースしてProfile Editorに渡す
+            const { extractedData } = parseExtractedData(aiResponse);
 
-                const threshold = action.type === 'DELETE' ? CONFIDENCE_THRESHOLD_DELETE : CONFIDENCE_THRESHOLD_DEFAULT;
+            if (extractedData && extractedData.extractedFacts.length > 0 && !extractedData.isSkipped && !extractedData.needsClarification) {
+                // Stage 3: Profile Editor AI
+                const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(
+                    c => c.id === extractedData.sectionId
+                )?.title || '';
 
-                if (action.confidence >= threshold) {
-                    const result = await executeProfileAction(user.id, action);
-                    if (result.success) {
-                        executedActions.push(action);
+                const existingSection = await prisma.healthProfileSection.findUnique({
+                    where: { userId_categoryId: { userId: user.id, categoryId: extractedData.sectionId } }
+                });
+
+                const editorResult = await generateProfileActions({
+                    extractedData,
+                    existingSectionContent: existingSection?.content || '',
+                    sectionId: extractedData.sectionId,
+                    sectionTitle,
+                });
+
+                for (const action of editorResult.actions) {
+                    if (action.type === 'NONE') continue;
+                    const threshold = action.type === 'DELETE' ? CONFIDENCE_THRESHOLD_DELETE : CONFIDENCE_THRESHOLD_DEFAULT;
+                    if (action.confidence >= threshold) {
+                        const result = await executeProfileAction(user.id, action);
+                        if (result.success) executedActions.push(action);
+                    } else {
+                        pendingActions.push(action);
                     }
-                } else {
-                    pendingActions.push(action);
                 }
-            }
 
-            // 質問進捗を更新
-            if (answeredQuestionId) {
+                if (editorResult.answeredQuestionId) {
+                    try {
+                        await updateQuestionProgress(user.id, session.id, editorResult.answeredQuestionId);
+                    } catch (e) {
+                        console.error('Failed to update question progress:', e);
+                    }
+                }
+            } else if (extractedData?.isSkipped && extractedData.questionId) {
                 try {
-                    await updateQuestionProgress(user.id, session.id, answeredQuestionId);
+                    await updateQuestionProgress(user.id, session.id, extractedData.questionId);
                 } catch (e) {
-                    console.error('Failed to update question progress:', e);
+                    console.error('Failed to update skipped question progress:', e);
                 }
             }
+        } else {
+            // data_analysis / helpモード: 従来のPROFILE_ACTION解析（これらのモードでは出力されないが念のため）
+            const parsed = parseAIResponse(aiResponse);
+            followUpTopic = parsed.followUpTopic;
         }
 
         // 最終レスポンス構築
-        let finalResponse = responseText;
+        const { responseText } = parseExtractedData(aiResponse);
+        let finalResponse = responseText
+            .replace(/<!--PROFILE_ACTION[\s\S]*?PROFILE_ACTION-->/g, '')
+            .trim();
+        finalResponse = stripModeSwitch(finalResponse);
 
-        // プロフィール構築モードのみ: 検出された問題と保留アクションを追加
-        if (currentMode === 'profile_building') {
-            if (detectedIssues.length > 0) {
-                finalResponse += formatIssuesForUser(detectedIssues);
-            }
-
-            if (pendingActions.length > 0) {
-                finalResponse += formatPendingActionsForUser(pendingActions);
-            }
+        if (pendingActions.length > 0) {
+            finalResponse += formatPendingActionsForUser(pendingActions);
         }
 
         // メッセージ保存

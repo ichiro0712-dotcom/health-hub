@@ -2,7 +2,8 @@
  * 健康プロフィール AIチャット v2 - ストリーミングAPI
  *
  * Server-Sent Events (SSE) を使用してリアルタイムで応答を返す
- * モード別システムプロンプト対応
+ * profile_buildingモード: 3エージェントパイプライン（Hearing AI → Profile Editor）
+ * data_analysis / helpモード: 従来の単一LLM呼び出し
  */
 
 import { NextRequest } from 'next/server';
@@ -29,6 +30,11 @@ import {
     CONFIDENCE_THRESHOLD_DEFAULT,
     CONFIDENCE_THRESHOLD_DELETE,
 } from '@/lib/chat-prompts';
+import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
+import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
+import { buildHearingSystemPrompt, parseExtractedData } from '@/lib/agents/hearing-agent';
+import { generateProfileActions } from '@/lib/agents/profile-editor';
+import type { HearingAgentInput } from '@/lib/agents/types';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
@@ -55,6 +61,69 @@ function checkRateLimit(userId: string): boolean {
 
     record.count++;
     return true;
+}
+
+// ============================================
+// プロフィール構築: 現在の質問とセクション情報を取得
+// ============================================
+
+async function getHearingContext(
+    userId: string,
+    session: { currentQuestionId: string | null; currentPriority: number },
+    profileContent: string,
+): Promise<HearingAgentInput | null> {
+    const answeredIds = await getAnsweredQuestionIds(userId);
+    const currentPriority = (session.currentPriority || 3) as 3 | 2 | 1;
+
+    // 現在の質問を取得
+    let currentQuestion = session.currentQuestionId
+        ? HEALTH_QUESTIONS.find(q => q.id === session.currentQuestionId)
+        : null;
+
+    // currentQuestionIdがない、または既に回答済みなら次の質問を取得
+    if (!currentQuestion || answeredIds.includes(currentQuestion.id)) {
+        currentQuestion = getNextQuestion(answeredIds, currentPriority) || null;
+    }
+
+    if (!currentQuestion) return null;
+
+    // 該当セクションの既存情報のみ抽出
+    const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(
+        c => c.id === currentQuestion.sectionId
+    )?.title || '';
+
+    let sectionContent = '';
+    if (profileContent) {
+        // 【セクション名】で囲まれたコンテンツを抽出
+        const regex = new RegExp(
+            `【[^】]*${sectionTitle.replace(/^\d+\.\s*/, '').substring(0, 4)}[^】]*】\\s*([\\s\\S]*?)(?=【|$)`
+        );
+        const match = profileContent.match(regex);
+        if (match && match[1]) {
+            sectionContent = match[1].trim();
+        }
+    }
+
+    // 会話の長さから初回かどうか判定
+    const messageCount = await prisma.healthChatMessage.count({
+        where: {
+            session: { userId },
+            role: 'user',
+        }
+    });
+
+    return {
+        currentQuestion: {
+            id: currentQuestion.id,
+            question: currentQuestion.question,
+            sectionId: currentQuestion.sectionId,
+            intent: currentQuestion.intent,
+            extractionHints: currentQuestion.extractionHints,
+        },
+        existingSectionContent: sectionContent,
+        conversationHistory: [], // 呼び出し元で設定
+        isFirstQuestion: messageCount === 0,
+    };
 }
 
 // ============================================
@@ -141,18 +210,40 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // モードに応じてGoogle Docsからコンテキストを取得
+    // モードに応じてコンテキストを取得し、システムプロンプトを生成
     let profileContent = '';
     let recordsContent = '';
-    let answeredQuestionIds: string[] = [];
+    let systemPrompt = '';
+    let hearingInput: HearingAgentInput | null = null;
+    const isProfileBuilding = currentMode === 'profile_building';
 
-    if (currentMode === 'profile_building') {
-        const [profileResult, answeredIds] = await Promise.all([
-            readHealthProfileFromGoogleDocs(),
-            getAnsweredQuestionIds(user.id)
-        ]);
+    if (isProfileBuilding) {
+        // プロフィール構築: ヒアリングエージェントのプロンプトを構築
+        const profileResult = await readHealthProfileFromGoogleDocs();
         profileContent = profileResult.success ? profileResult.content || '' : '';
-        answeredQuestionIds = answeredIds;
+
+        hearingInput = await getHearingContext(
+            user.id,
+            { currentQuestionId: session.currentQuestionId, currentPriority: session.currentPriority },
+            profileContent,
+        );
+
+        if (hearingInput) {
+            // 会話履歴を設定
+            const rawHistory = session.messages.map(m => ({
+                role: m.role,
+                content: m.content
+            }));
+            hearingInput.conversationHistory = summarizeHistory(rawHistory);
+            systemPrompt = buildHearingSystemPrompt(hearingInput);
+        } else {
+            // 質問が尽きた場合はフォールバック
+            systemPrompt = buildSystemPrompt({
+                mode: currentMode,
+                profileContent,
+                recordsContent: '',
+            });
+        }
     } else if (currentMode === 'data_analysis') {
         const [profileResult, recordsResult] = await Promise.all([
             readHealthProfileFromGoogleDocs(),
@@ -160,8 +251,19 @@ export async function POST(req: NextRequest) {
         ]);
         profileContent = profileResult.success ? profileResult.content || '' : '';
         recordsContent = recordsResult.success ? recordsResult.content || '' : '';
+        systemPrompt = buildSystemPrompt({
+            mode: currentMode,
+            profileContent,
+            recordsContent,
+        });
+    } else {
+        // help モード
+        systemPrompt = buildSystemPrompt({
+            mode: currentMode,
+            profileContent: '',
+            recordsContent: '',
+        });
     }
-    // help モードではGoogle Docs読み込み不要
 
     // 会話履歴を構築
     const rawHistory = session.messages.map(m => ({
@@ -169,16 +271,6 @@ export async function POST(req: NextRequest) {
         content: m.content
     }));
     const history = summarizeHistory(rawHistory);
-
-    // モード別システムプロンプト生成
-    const systemPrompt = buildSystemPrompt({
-        mode: currentMode,
-        profileContent,
-        recordsContent,
-        answeredQuestionIds,
-        currentQuestionId: session.currentQuestionId,
-        currentPriority: session.currentPriority,
-    });
 
     // Gemini APIをストリーミングで呼び出し
     const contents = [
@@ -198,7 +290,7 @@ export async function POST(req: NextRequest) {
                 systemInstruction: { parts: [{ text: systemPrompt }] },
                 contents,
                 generationConfig: {
-                    temperature: 0.4,
+                    temperature: isProfileBuilding ? 0.4 : 0.4,
                     maxOutputTokens: 4096,
                 }
             })
@@ -221,11 +313,15 @@ export async function POST(req: NextRequest) {
     const userIdForClosure = user.id;
     const modeForClosure = currentMode;
 
+    // フィルタリングするマーカー名を決定
+    const markerName = isProfileBuilding ? 'EXTRACTED_DATA' : 'PROFILE_ACTION';
+    const markerStart = `<!--${markerName}`;
+    const markerEnd = `${markerName}-->`;
+
     const stream = new ReadableStream({
         async start(controller) {
             const reader = geminiResponse.body!.getReader();
-            // PROFILE_ACTIONブロックがチャンクをまたぐ場合のバッファ
-            let insideProfileAction = false;
+            let insideMarker = false;
             let pendingBuffer = '';
 
             try {
@@ -248,32 +344,31 @@ export async function POST(req: NextRequest) {
                                 if (text) {
                                     fullResponse += text;
 
-                                    // PROFILE_ACTIONブロックのフィルタリング（チャンクまたぎ対応）
+                                    // マーカーブロックのフィルタリング（チャンクまたぎ対応）
                                     let textToProcess = pendingBuffer + text;
                                     pendingBuffer = '';
 
-                                    if (insideProfileAction) {
-                                        // ブロック終了を探す
-                                        const endIdx = textToProcess.indexOf('PROFILE_ACTION-->');
+                                    if (insideMarker) {
+                                        const endIdx = textToProcess.indexOf(markerEnd);
                                         if (endIdx !== -1) {
-                                            insideProfileAction = false;
-                                            textToProcess = textToProcess.substring(endIdx + 'PROFILE_ACTION-->'.length);
+                                            insideMarker = false;
+                                            textToProcess = textToProcess.substring(endIdx + markerEnd.length);
                                         } else {
-                                            // まだブロック内 - 送信しない
                                             continue;
                                         }
                                     }
 
                                     // 完全なブロックを除去
-                                    textToProcess = textToProcess.replace(/<!--PROFILE_ACTION[\s\S]*?PROFILE_ACTION-->/g, '');
+                                    const fullBlockRegex = new RegExp(`<!--${markerName}[\\s\\S]*?${markerName}-->`, 'g');
+                                    textToProcess = textToProcess.replace(fullBlockRegex, '');
 
                                     // MODE_SWITCHマーカーも除去
                                     textToProcess = textToProcess.replace(/<!--MODE_SWITCH:\s*\w+\s*-->/g, '');
 
                                     // ブロック開始が含まれているが終了がない場合
-                                    const startIdx = textToProcess.indexOf('<!--PROFILE_ACTION');
+                                    const startIdx = textToProcess.indexOf(markerStart);
                                     if (startIdx !== -1) {
-                                        insideProfileAction = true;
+                                        insideMarker = true;
                                         const beforeBlock = textToProcess.substring(0, startIdx);
                                         if (beforeBlock) {
                                             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: beforeBlock })}\n\n`));
@@ -281,10 +376,9 @@ export async function POST(req: NextRequest) {
                                         continue;
                                     }
 
-                                    // 「<!--」で始まるPROFILE_ACTIONの部分的な開始を検出
-                                    // (例: チャンク末尾が「<!--PROF」で終わる場合)
+                                    // 部分的な開始マーカーを検出
                                     const partialMarkerIdx = textToProcess.lastIndexOf('<!--');
-                                    if (partialMarkerIdx !== -1 && partialMarkerIdx > textToProcess.length - '<!--PROFILE_ACTION'.length) {
+                                    if (partialMarkerIdx !== -1 && partialMarkerIdx > textToProcess.length - markerStart.length) {
                                         pendingBuffer = textToProcess.substring(partialMarkerIdx);
                                         textToProcess = textToProcess.substring(0, partialMarkerIdx);
                                     }
@@ -300,8 +394,8 @@ export async function POST(req: NextRequest) {
                     }
                 }
 
-                // バッファに残ったテキストがあれば送信（PROFILE_ACTIONでなかった場合）
-                if (pendingBuffer && !insideProfileAction) {
+                // バッファに残ったテキストがあれば送信
+                if (pendingBuffer && !insideMarker) {
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: pendingBuffer })}\n\n`));
                 }
 
@@ -316,71 +410,92 @@ export async function POST(req: NextRequest) {
                     updatedMode = newMode;
                 }
 
-                // プロフィール構築モードのみPROFILE_ACTIONを処理
-                let actions: ProfileAction[] = [];
-                let detectedIssues: DetectedIssue[] = [];
+                // アクション処理
                 const executedActions: ProfileAction[] = [];
                 const pendingActions: ProfileAction[] = [];
+                const detectedIssues: DetectedIssue[] = [];
 
                 if (modeForClosure === 'profile_building') {
-                    const actionMatch = fullResponse.match(/<!--PROFILE_ACTION\n([\s\S]*?)\nPROFILE_ACTION-->/);
-                    let answeredQuestionId: string | null = null;
+                    // 3エージェントパイプライン: EXTRACTED_DATAをパースしてProfile Editorに渡す
+                    const { extractedData } = parseExtractedData(fullResponse);
 
-                    if (actionMatch) {
-                        try {
-                            const parsed = JSON.parse(actionMatch[1]);
-                            actions = parsed.actions || [];
-                            detectedIssues = parsed.detected_issues || [];
-                            answeredQuestionId = parsed.answered_question_id || null;
-                        } catch {
-                            // パースエラーは無視
-                        }
-                    }
+                    if (extractedData && extractedData.extractedFacts.length > 0 && !extractedData.isSkipped && !extractedData.needsClarification) {
+                        // Stage 3: Profile Editor AI
+                        const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(
+                            c => c.id === extractedData.sectionId
+                        )?.title || '';
 
-                    // アクションを実行
-                    for (const action of actions) {
-                        if (action.type === 'NONE') continue;
+                        // 該当セクションの既存内容を取得
+                        const existingSection = await prisma.healthProfileSection.findUnique({
+                            where: { userId_categoryId: { userId: userIdForClosure, categoryId: extractedData.sectionId } }
+                        });
 
-                        const threshold = action.type === 'DELETE' ? CONFIDENCE_THRESHOLD_DELETE : CONFIDENCE_THRESHOLD_DEFAULT;
+                        const editorResult = await generateProfileActions({
+                            extractedData,
+                            existingSectionContent: existingSection?.content || '',
+                            sectionId: extractedData.sectionId,
+                            sectionTitle,
+                        });
 
-                        if (action.confidence >= threshold) {
-                            const result = await executeProfileAction(userIdForClosure, action);
-                            if (result.success) {
-                                executedActions.push(action);
+                        // アクションを実行
+                        for (const action of editorResult.actions) {
+                            if (action.type === 'NONE') continue;
+
+                            const threshold = action.type === 'DELETE' ? CONFIDENCE_THRESHOLD_DELETE : CONFIDENCE_THRESHOLD_DEFAULT;
+
+                            if (action.confidence >= threshold) {
+                                const result = await executeProfileAction(userIdForClosure, action);
+                                if (result.success) {
+                                    executedActions.push(action);
+                                }
+                            } else {
+                                pendingActions.push(action);
                             }
-                        } else {
-                            pendingActions.push(action);
                         }
-                    }
 
-                    // 質問進捗を更新
-                    if (answeredQuestionId) {
+                        // 質問進捗を更新
+                        if (editorResult.answeredQuestionId) {
+                            try {
+                                await updateQuestionProgress(
+                                    userIdForClosure,
+                                    sessionIdForClosure,
+                                    editorResult.answeredQuestionId
+                                );
+                            } catch (e) {
+                                console.error('Failed to update question progress:', e);
+                            }
+                        }
+                    } else if (extractedData?.isSkipped && extractedData.questionId) {
+                        // スキップの場合も進捗を更新
                         try {
                             await updateQuestionProgress(
                                 userIdForClosure,
                                 sessionIdForClosure,
-                                answeredQuestionId
+                                extractedData.questionId
                             );
                         } catch (e) {
-                            console.error('Failed to update question progress:', e);
+                            console.error('Failed to update skipped question progress:', e);
                         }
                     }
+                } else {
+                    // data_analysis / helpモード: 従来のPROFILE_ACTIONはこれらのモードでは出力されない
                 }
 
                 // メッセージを保存
-                let cleanResponse = fullResponse
+                const { responseText: cleanResponse } = parseExtractedData(fullResponse);
+                let finalCleanResponse = cleanResponse
                     .replace(/<!--PROFILE_ACTION[\s\S]*?PROFILE_ACTION-->/g, '')
                     .trim();
-                cleanResponse = stripModeSwitch(cleanResponse);
+                finalCleanResponse = stripModeSwitch(finalCleanResponse);
 
                 await prisma.healthChatMessage.createMany({
                     data: [
                         { sessionId: sessionIdForClosure, role: 'user', content: userMessage },
-                        { sessionId: sessionIdForClosure, role: 'assistant', content: cleanResponse }
+                        { sessionId: sessionIdForClosure, role: 'assistant', content: finalCleanResponse }
                     ]
                 });
 
-                // Google Docs同期（プロフィール構築モードでアクション実行時のみ）
+                // Google Docs同期（アクション実行時のみ）
                 let syncStatus = 'not_needed';
                 if (executedActions.length > 0) {
                     try {
@@ -403,7 +518,7 @@ export async function POST(req: NextRequest) {
                     }
                 }
 
-                // 完了イベントを送信（modeも含める）
+                // 完了イベントを送信
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({
                     done: true,
                     sessionId: sessionIdForClosure,

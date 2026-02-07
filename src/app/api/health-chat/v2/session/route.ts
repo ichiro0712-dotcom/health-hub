@@ -1,13 +1,22 @@
 /**
  * 健康プロフィール AIチャット v2 - セッション管理API
  *
- * GET: セッション状態を取得、または新規セッションを開始（高速・楽観的）
+ * GET: セッション状態を取得、または新規セッションを開始
+ * POST: Google Docsデータを同期 + プロフィール分析
+ * DELETE: セッションをクリア
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import prisma from '@/lib/prisma';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
+import { getAnsweredQuestionIds } from '@/lib/chat-prompts';
+import { analyzeProfile } from '@/lib/agents/profile-analyzer';
+import { getNextQuestion } from '@/constants/health-questions';
+import {
+    readHealthProfileFromGoogleDocs,
+    readRecordsFromGoogleDocs
+} from '@/lib/google-docs';
 
 // ============================================
 // データ状態の検出
@@ -59,83 +68,22 @@ async function detectDataStatus(userId: string): Promise<DataStatus> {
 // ============================================
 
 function buildWelcomeMessage(status: DataStatus): string {
-    const lines: string[] = [];
-    let choiceNum = 1;
-
-    // 固定: あいさつ + できること
-    lines.push('こんにちは！H-Hubアシスタントです。');
-    lines.push('');
-    lines.push('私はあなたの健康データの管理をお手伝いします。');
-    lines.push('できることは以下です！');
-    lines.push('');
-    lines.push(`${toFullWidth(choiceNum++)}．健康プロフィールの${status.profileFilledCount > 0 ? '更新' : '作成・更新'}`);
-    lines.push(`${toFullWidth(choiceNum++)}．健康診断の結果や記録データの分析・アドバイス`);
-    lines.push(`${toFullWidth(choiceNum++)}．Health Hubの使い方サポート`);
-
-    // 動的: データ不足の提案
     const hasProfileGap = status.profileFilledCount < status.profileTotalCount;
-    const needsDataInput = !status.hasRecords || hasProfileGap;
 
-    if (needsDataInput) {
-        lines.push('');
-        if (!status.hasRecords && status.profileFilledCount === 0) {
-            lines.push('まだデータが入っていないようですね。');
-            lines.push('まずはデータの入力から始めませんか？');
-        } else if (!status.hasRecords) {
-            lines.push('健康診断の記録がまだ登録されていないようです。');
-        } else if (hasProfileGap) {
-            // 未入力セクション名を最大3つ表示
-            const examples = status.missingSectionNames.slice(0, 3).join('、');
-            const suffix = status.missingSectionNames.length > 3 ? 'など' : '';
-            lines.push(`健康プロフィールにまだ入力されていない項目があります（${examples}${suffix}）。`);
+    // プロフィール未完成 → メニューなしで即プロフィール構築開始
+    if (hasProfileGap) {
+        if (status.profileFilledCount === 0) {
+            return 'こんにちは！H-Hubアシスタントです。\n\n健康プロフィールを充実させるために質問を進めさせてもらいますね。\n途中で辞めたいときは「ここまで保存して」と言ってください。';
         }
-
-        lines.push('');
-        if (!status.hasRecords) {
-            lines.push(`${toFullWidth(choiceNum++)}．健康診断・医療データについて教える`);
-        }
-        if (hasProfileGap) {
-            lines.push(`${toFullWidth(choiceNum++)}．健康プロフィールを${status.profileFilledCount === 0 ? '作成する' : '充実させる'}`);
-        }
+        return 'こんにちは！H-Hubアシスタントです。\n\nプロフィールの内容を確認して、足りないところから質問を進めさせてもらいますね。\n途中で辞めたいときは「ここまで保存して」と言ってください。';
     }
 
-    // 動的: 連携未設定の提案
-    const hasIntegrationGap = !status.hasFitbit || !status.hasGoogleDocs;
-
-    if (hasIntegrationGap) {
-        lines.push('');
-        lines.push('Health Hubではスマートウォッチやお持ちのAIとの連携もできます。');
-        if (!status.hasFitbit && !status.hasGoogleDocs) {
-            lines.push('まだ連携していないものがあるようです。');
-        }
-
-        lines.push('');
-        if (!status.hasFitbit) {
-            lines.push(`${toFullWidth(choiceNum++)}．スマートウォッチ・スマホとの連携`);
-        }
-        if (!status.hasGoogleDocs) {
-            lines.push(`${toFullWidth(choiceNum++)}．Gemini・ChatGPTへの健康データ連携`);
-        }
-    }
-
-    lines.push('');
-    lines.push('何から始めますか？番号でもお気軽にどうぞ！');
-
-    return lines.join('\n');
+    // プロフィール完成済み → シンプルな3択
+    return `こんにちは！H-Hubアシスタントです。\n\n健康プロフィールは充実しています！何をお手伝いしますか？\n\n１．健康プロフィールの更新\n２．健康データの分析・アドバイス\n３．使い方サポート`;
 }
 
 function buildResumeMessage(): string {
-    return `お帰りなさい！
-
-前回の続きから再開しますか？それとも別のことをしますか？
-
-１．前回の続きから
-２．別のことをする`;
-}
-
-function toFullWidth(num: number): string {
-    const fullWidthDigits = ['０', '１', '２', '３', '４', '５', '６', '７', '８', '９'];
-    return String(num).split('').map(d => fullWidthDigits[parseInt(d)]).join('');
+    return `お帰りなさい！前回の続きから再開しますね。`;
 }
 
 // ============================================
@@ -176,23 +124,65 @@ export async function GET(req: NextRequest) {
         // データ状態を検出
         const dataStatus = await detectDataStatus(user.id);
         const hasProfile = dataStatus.profileFilledCount > 0;
+        const hasProfileGap = dataStatus.profileFilledCount < dataStatus.profileTotalCount;
 
         // ウェルカムメッセージを生成
         let welcomeMessage: string;
+        let analyzerResult = null;
 
         if (session && session.messages.length > 0) {
             // 既存セッションを再開
             welcomeMessage = buildResumeMessage();
         } else {
-            // 新規セッション
-            welcomeMessage = buildWelcomeMessage(dataStatus);
+            // 新規セッション: プロフィール未完成時はアナライザー実行
+            let firstQuestionText = '';
 
-            // 新規セッションを作成
+            if (hasProfileGap) {
+                try {
+                    // プロフィール分析 + 回答済み質問の取得を並行実行
+                    const answeredIds = await getAnsweredQuestionIds(user.id);
+
+                    // Google Docsからプロフィールを読み込み
+                    const profileResult = await readHealthProfileFromGoogleDocs();
+                    const profileContent = profileResult.success ? profileResult.content || '' : '';
+
+                    // アナライザー実行
+                    analyzerResult = await analyzeProfile({
+                        profileContent,
+                        answeredQuestionIds: answeredIds,
+                    });
+
+                    // 最初の質問を取得
+                    if (analyzerResult.missingQuestions.length > 0) {
+                        const firstQ = analyzerResult.missingQuestions[0];
+                        const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(
+                            c => c.id === firstQ.sectionId
+                        )?.title || '';
+                        firstQuestionText = `\n\n「${sectionTitle}」について聞かせてください。\n\n${firstQ.question}`;
+                    }
+                } catch (error) {
+                    console.error('[Session] Analyzer failed:', error);
+                    // フォールバック: 従来のgetNextQuestionを使用
+                    const answeredIds = await getAnsweredQuestionIds(user.id);
+                    const nextQ = getNextQuestion(answeredIds, 3);
+                    if (nextQ) {
+                        const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(
+                            c => c.id === nextQ.sectionId
+                        )?.title || '';
+                        firstQuestionText = `\n\n「${sectionTitle}」について聞かせてください。\n\n${nextQ.question}`;
+                    }
+                }
+            }
+
+            welcomeMessage = buildWelcomeMessage(dataStatus) + firstQuestionText;
+
+            // 新規セッションを作成（プロフィール未完成時はprofile_buildingモードを即設定）
             session = await prisma.healthChatSession.create({
                 data: {
                     userId: user.id,
                     status: 'active',
                     currentPriority: 3,
+                    mode: hasProfileGap ? 'profile_building' : null,
                 },
                 include: { messages: { orderBy: { createdAt: 'asc' } } }
             });
@@ -219,6 +209,7 @@ export async function GET(req: NextRequest) {
                 content: m.content,
                 createdAt: m.createdAt
             })),
+            analyzerResult,
             context: {
                 hasProfile,
                 hasRecords: dataStatus.hasRecords,
@@ -241,11 +232,6 @@ export async function GET(req: NextRequest) {
 /**
  * POST: Google Docsデータを同期（手動トリガー）
  */
-import {
-    readHealthProfileFromGoogleDocs,
-    readRecordsFromGoogleDocs
-} from '@/lib/google-docs';
-
 export async function POST(req: NextRequest) {
     try {
         const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
