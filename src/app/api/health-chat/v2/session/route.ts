@@ -147,6 +147,24 @@ export async function GET(req: NextRequest) {
         if (session && session.messages.length > 0) {
             // 既存セッションを再開
             welcomeMessage = buildResumeMessage();
+
+            // 既存セッション再開時もプロフィールの重複・矛盾をチェック
+            if (hasProfileGap || hasProfile) {
+                try {
+                    const answeredIds = await getAnsweredQuestionIds(user.id);
+                    const profileResult = await readHealthProfileFromGoogleDocs();
+                    const profileContent = profileResult.success ? profileResult.content || '' : '';
+
+                    if (profileContent.length >= 20) {
+                        analyzerResult = await analyzeProfile({
+                            profileContent,
+                            answeredQuestionIds: answeredIds,
+                        });
+                    }
+                } catch (error) {
+                    console.error('[Session] Resume analyzer failed:', error);
+                }
+            }
         } else {
             // 新規セッション: プロフィール未完成時はアナライザー実行
             let firstQuestionText = '';
@@ -165,6 +183,8 @@ export async function GET(req: NextRequest) {
                         profileContent,
                         answeredQuestionIds: answeredIds,
                     });
+
+                    console.log(`[Session] Analyzer result: ${analyzerResult.issues.length} issues, ${analyzerResult.missingQuestions.length} missing questions`);
 
                     // 重複・矛盾がある場合は先に整理提案、なければ最初の質問を取得
                     if (analyzerResult.issues.length > 0) {
