@@ -12,13 +12,21 @@ v1（CHAT_HEARING_SPEC.md）は固定質問リスト＋進捗管理方式。v2�
 - 動的ウェルカムメッセージ（データ状態検出）
 - FAQ/使い方サポート機能を内蔵
 
+### v2.1: 3エージェントパイプライン化
+
+v2の単一LLM呼び出しを**3つの役割特化AI**に分離:
+
+- 1つのLLMに全ルール（プロフィール全文 + 169問ガイド + 重複検出 + 会話 + 編集ルール）を詰め込む方式を廃止
+- プロフィール未完成時の番号選択メニューを廃止、即質問開始に変更
+- 重複・矛盾検出を専用AIで確実に実行
+
 ---
 
-## アーキテクチャ: "Google Docs Truth Source" モデル
+## アーキテクチャ: 3エージェントパイプライン
 
-### 核心的な変更
+### 核心的な設計
 
-**Google Docsを「信頼できる唯一の情報源（Single Source of Truth）」として扱う**
+**Google Docsを「信頼できる唯一の情報源（Single Source of Truth）」として扱い、プロフィール構築時は3つの役割特化AIがパイプラインで処理する**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -33,14 +41,29 @@ v1（CHAT_HEARING_SPEC.md）は固定質問リスト＋進捗管理方式。v2�
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 AIチャットエンジン                           │
-│                                                             │
-│  1. プロフィール全文をコンテキストに含める                    │
-│  2. AIが自律的に「何が不足か」を判断                         │
-│  3. 構造化出力で精密なプロフィール更新                       │
-│  4. 重複検出・解決をAIが実行                                 │
-│  5. 健康データの分析・アドバイスを提供                       │
-│  6. Health Hubの使い方をFAQ情報から回答                      │
+│          Stage 1: Profile Analyzer（セッション開始時）       │
+│  - プロフィール全文を分析                                    │
+│  - 重複・矛盾・古い情報を検出                               │
+│  - 未入力の質問リストをpriority順で生成                      │
+│  - Temperature: 0.1、JSON出力のみ、1回だけ実行               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│          Stage 2: Hearing AI（ユーザーとの対話）              │
+│  - 現在の質問1つ + 該当セクションの既存情報のみ使用           │
+│  - プロンプト ~800-1000トークン（従来の3000-5000から削減）    │
+│  - 会話テキスト + <!--EXTRACTED_DATA-->で抽出情報を返す       │
+│  - Temperature: 0.4、ストリーミング対応                      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│          Stage 3: Profile Editor（バックグラウンド）          │
+│  - Hearing AIの抽出結果を受け取り                            │
+│  - ADD vs UPDATE の判定に特化（重複防止）                    │
+│  - PROFILE_ACTION JSONを生成                                 │
+│  - Temperature: 0.1、ストリーミング不要                      │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -52,21 +75,25 @@ v1（CHAT_HEARING_SPEC.md）は固定質問リスト＋進捗管理方式。v2�
 └─────────────────────────────────────────────────────────────┘
 ```
 
+**data_analysis / help モードは従来の単一LLM方式を継続**（3エージェント化はprofile_buildingモードのみ）
+
 ---
 
-## AIの3つの役割
+## チャットの3つのモード
 
-### 1. プロフィールの構築・改善
-- ユーザーとの対話から健康情報を聞き取り
-- 適切なセクション（11カテゴリ）に情報を追加・更新・削除
-- 重複・矛盾・古い情報の検出と解決提案
+### 1. プロフィールの構築・改善（profile_building）
+- **3エージェントパイプライン**で処理
+- Profile Analyzerが重複・矛盾を検出し、未入力質問をリストアップ
+- Hearing AIが1問ずつ集中してユーザーから情報を聞き取り
+- Profile Editorが抽出結果からADD/UPDATEアクションを生成
+- プロフィール未完成時はセッション開始と同時にprofile_buildingモードに自動設定
 
-### 2. 健康データの分析・アドバイス
+### 2. 健康データの分析・アドバイス（data_analysis）
 - プロフィールや診断記録データを読み取り、傾向や気になる点を指摘
 - 数値の経年変化や基準値との比較
 - 生活改善のアドバイスを提供
 
-### 3. Health Hubの使い方サポート
+### 3. Health Hubの使い方サポート（help）
 - システムプロンプトに埋め込まれたFAQ情報をもとに回答
 - 連携設定などは該当する設定ページへ誘導（チャット内で完結させない）
 - `/help` ページも別途用意
@@ -92,36 +119,44 @@ interface DataStatus {
 
 ### 動的ウェルカムメッセージ
 
-ユーザーのデータ状態に応じて、以下の構成で番号付き選択肢を動的生成:
+ユーザーのデータ状態に応じて、フローを分岐:
 
-**固定ブロック（常に表示）:**
-- あいさつ
-- ①健康プロフィールの作成・更新
-- ②健康データの分析・アドバイス
-- ③Health Hubの使い方サポート
+**プロフィール未完成時（メニューなし・即開始）:**
+- Profile Analyzerを実行し、重複・矛盾の検出 + 未入力質問リストアップ
+- ウェルカムメッセージ + 最初の質問を即表示
+- 番号選択なしで自動的にprofile_buildingモードで開始
+```
+こんにちは！H-Hubアシスタントです。
 
-**データ不足ブロック（条件付き表示）:**
-- 健康診断記録なし → 「④健康診断・医療データについて教える」
-- プロフィール未入力あり → 「⑤健康プロフィールを充実させる」
+プロフィールの内容を確認して、足りないところから質問を進めさせてもらいますね。
+途中で辞めたいときは「ここまで保存して」と言ってください。
 
-**連携未設定ブロック（条件付き表示）:**
-- Fitbit未連携 → 「⑥スマートウォッチ・スマホとの連携」
-- Google Docs未連携 → 「⑦Gemini・ChatGPTへの健康データ連携」
+「1. 基本属性・バイオメトリクス」について聞かせてください。
+
+お名前（ニックネームでもOK）と、性別、年齢を教えていただけますか？
+```
+
+**プロフィール完成済み（シンプルな3択）:**
+```
+こんにちは！H-Hubアシスタントです。
+
+健康プロフィールは充実しています！何をお手伝いしますか？
+
+１．健康プロフィールの更新
+２．健康データの分析・アドバイス
+３．使い方サポート
+```
 
 ### セッション再開
 
 既存セッション（メッセージあり）を再開する場合:
 ```
-お帰りなさい！
-
-前回の続きから再開しますか？それとも別のことをしますか？
-
-１．前回の続きから
-２．別のことをする
+お帰りなさい！前回の続きから再開しますね。
 ```
 
 ### 番号選択への対応
 
+- プロフィール完成済みの3択メニュー表示時のみ関係
 - 半角「1」、全角「１」、対応する言葉のいずれでも受け付け
 - システムプロンプトに番号→トピックのマッピングを記載
 
@@ -129,63 +164,51 @@ interface DataStatus {
 
 ## システムプロンプト設計
 
-### コンテキスト構築
+### profile_buildingモード: 3エージェントパイプライン
 
-チャット開始時に以下を取得（Google Docs同期は手動ボタンで実行）:
-- Google Docsから健康プロフィール全文（READ）
-- Google Docsから診断記録全文（READ）
+profile_buildingモードでは、従来の単一プロンプトに代えて3つの役割特化AIがそれぞれコンパクトなプロンプトで動作する。
 
-### システムプロンプト構成
+#### Stage 1: Profile Analyzer（セッション開始時に1回実行）
+- プロフィール全文 + 回答済み質問IDリストを入力
+- 重複・矛盾・古い情報をJSON形式で出力
+- 未入力の質問リストをpriority順で生成
+- Gemini 2.0 Flash / Temperature: 0.1
+
+#### Stage 2: Hearing AI（毎回の対話で使用・ストリーミング）
+- **現在の質問1つ** + **該当セクションの既存情報のみ**をプロンプトに含める
+- プロンプトサイズ: ~800-1000トークン（従来の3000-5000トークンから大幅削減）
+- 会話テキスト + `<!--EXTRACTED_DATA ... EXTRACTED_DATA-->` マーカーで抽出情報を返す
+- Gemini 2.0 Flash / Temperature: 0.4
+
+#### Stage 3: Profile Editor（バックグラウンド実行）
+- Hearing AIの `EXTRACTED_DATA` を受け取り
+- 既存セクション内容と照合して ADD vs UPDATE を判定（重複防止）
+- `PROFILE_ACTION` JSONを生成
+- Gemini 2.0 Flash / Temperature: 0.1
+
+### data_analysis / helpモード: 従来方式
+
+data_analysis / helpモードは従来どおり単一システムプロンプトで動作:
+- プロフィール全文 + 診断記録をコンテキストに含める
+- モード別のルール（分析 or FAQ）をプロンプトに記載
+- PROFILE_ACTIONは出力しない
+
+### 共通要素
 
 ```markdown
-あなたはHealth Hubの健康プロフィール構築・改善・分析を支援するAIアシスタントです。
-
-## あなたが持っている情報
-
-### 現在の健康プロフィール（Google Docsから読み込み）
-{PROFILE_CONTENT}
-
-### 診断記録データ（Google Docsから読み込み）
-{RECORDS_CONTENT（最大8000文字）}
-
-## 利用可能なセクションID
-  basic_attributes（1. 基本属性・バイオメトリクス）
-  genetics（2. 遺伝・家族歴）
-  ...全11セクション
-
-## あなたの役割
-
-1. **プロフィールの構築・改善**: ユーザーとの対話から健康情報を聞き取り、プロフィールに追加・更新・削除する
-2. **健康データの分析・アドバイス**: プロフィールや診断記録データを読み取り、傾向の指摘・生活改善のアドバイスを提供する
-3. **Health Hubの使い方サポート**: FAQ情報をもとにアプリの機能や使い方について回答する
-4. **自然な対話**: ユーザーの話の流れに沿って深掘りし、適切なタイミングで関連質問をする
-
 ## ウェルカムメッセージの番号選択への対応
-
-（ユーザーが数字や言葉で選択肢を選べるように対応）
+（プロフィール完成済みの3択メニュー表示時のみ）
 
 ## 設定ページへの誘導
-
-連携や設定に関する質問には、チャット内で設定を完結させず設定ページへ誘導:
 - Fitbit連携 → /settings/fitbit
 - Google Docs連携 → /settings/google-docs
 - スマホデータ連携 → /settings/data-sync
 - 検査項目の設定 → /profile/settings/items
 
-## Health Hub FAQ情報
-
-（主な機能、データ連携、データ入力方法を記載）
-
 ## 重要なルール
-
-1. 既存情報の尊重: プロフィールに既に書いてあることは再度質問しない
-2. 確認が必要: confidence < 0.8 の更新は実行前に確認を求める
-3. 削除は慎重に: confidence 0.95以上でないと自動実行しない
-4. 必ず質問を含める: 終了希望以外は必ず1つ質問を含める
-
-## 出力形式
-
-応答テキストの後に、PROFILE_ACTION JSONブロックを出力
+1. 確認が必要: confidence < 0.8 の更新は実行前に確認を求める
+2. 削除は慎重に: confidence 0.95以上でないと自動実行しない
+3. 必ず質問を含める: 終了希望以外は必ず1つ質問を含める
 ```
 
 ---
@@ -194,7 +217,7 @@ interface DataStatus {
 
 ### GET /api/health-chat/v2/session
 
-セッション取得/新規作成（高速・楽観的）
+セッション取得/新規作成。新規セッション時にProfile Analyzerを実行し、最初の質問を含むウェルカムメッセージを生成。
 
 **レスポンス:**
 ```json
@@ -202,8 +225,17 @@ interface DataStatus {
   "success": true,
   "sessionId": "uuid",
   "status": "active",
-  "welcomeMessage": "（動的生成されたウェルカムメッセージ）",
+  "mode": "profile_building",
+  "welcomeMessage": "（ウェルカムメッセージ + 最初の質問）",
   "messages": [],
+  "analyzerResult": {
+    "issues": [
+      { "type": "DUPLICATE", "sectionId": "basic_attributes", "description": "...", "suggestedFix": "..." }
+    ],
+    "missingQuestions": [
+      { "sectionId": "basic_attributes", "questionId": "1-1", "question": "..." }
+    ]
+  },
   "context": {
     "hasProfile": true,
     "hasRecords": false,
@@ -235,16 +267,22 @@ Server-Sent Events (SSE) を使用してリアルタイムで応答を返す。
 }
 ```
 
-**処理フロー:**
+**処理フロー（profile_buildingモード）:**
 1. 認証チェック・レート制限
-2. Google Docsからコンテキスト読み込み
+2. Google Docsからプロフィール読み込み（該当セクションのみ抽出）
 3. 会話履歴取得（最大20件、超過分はサマリー化）
-4. Gemini 2.0 Flash にストリーミングリクエスト
-5. SSEでリアルタイム応答（PROFILE_ACTIONブロックはフィルタリング）
-6. 応答完了後、PROFILE_ACTIONを解析
-7. confidence ≥ 0.8 のアクションを自動実行（DELETEは 0.95以上）
-8. 低confidence のアクションはpendingActionsとして返却
-9. メッセージ保存・Google Docs同期
+4. **Hearing AI**のシステムプロンプトを構築（現在の質問1つ + セクション情報）
+5. Gemini 2.0 Flash にストリーミングリクエスト
+6. SSEでリアルタイム応答（`EXTRACTED_DATA`ブロックはフィルタリング）
+7. 応答完了後、`EXTRACTED_DATA`をパース
+8. **Profile Editor AI**に抽出データを渡してPROFILE_ACTIONを生成
+9. confidence ≥ 0.8 のアクションを自動実行（DELETEは 0.95以上）
+10. 低confidence のアクションはpendingActionsとして返却
+11. 質問進捗を更新
+12. メッセージ保存・Google Docs同期
+
+**処理フロー（data_analysis / helpモード）:**
+1-4は従来どおり単一システムプロンプトで処理
 
 **SSEデータ形式:**
 ```
@@ -264,37 +302,54 @@ data: {"done": true, "executedActions": [...], "pendingActions": [...]}
 
 ## 構造化出力
 
-### PROFILE_ACTION フォーマット
+### EXTRACTED_DATA フォーマット（Hearing AI → Profile Editor）
+
+profile_buildingモードでHearing AIが出力する抽出データ:
 
 ```
-<!--PROFILE_ACTION
+<!--EXTRACTED_DATA
+{
+  "questionId": "1-1",
+  "sectionId": "basic_attributes",
+  "rawAnswer": "ユーザーの元の回答テキスト",
+  "extractedFacts": [
+    {
+      "key": "name",
+      "value": "田中太郎",
+      "hint": "名前",
+      "confidence": 0.95
+    }
+  ],
+  "isSkipped": false,
+  "needsClarification": false
+}
+EXTRACTED_DATA-->
+```
+
+### PROFILE_ACTION フォーマット（Profile Editor → DB更新）
+
+Profile Editorが生成するアクション（従来形式と互換）:
+
+```
 {
   "actions": [
     {
       "type": "ADD" | "UPDATE" | "DELETE" | "NONE",
       "section_id": "セクションID",
-      "target_text": "更新/削除対象テキスト",
+      "target_text": "更新/削除対象テキスト（UPDATEの場合）",
       "new_text": "追加/更新後テキスト",
       "reason": "変更理由",
       "confidence": 0.0-1.0
     }
-  ],
-  "detected_issues": [
-    {
-      "type": "DUPLICATE" | "CONFLICT" | "OUTDATED" | "MISSING",
-      "description": "問題の説明",
-      "suggested_resolution": "解決案"
-    }
-  ],
-  "follow_up_topic": "次に聞くと良いトピック"
+  ]
 }
-PROFILE_ACTION-->
 ```
 
-### ストリーミング時のPROFILE_ACTIONフィルタリング
+### ストリーミング時のマーカーフィルタリング
 
-SSEストリーミング中、PROFILE_ACTIONブロックがチャンク境界で分割される問題に対応:
-- `insideProfileAction` フラグで状態管理
+SSEストリーミング中、マーカーブロック（`EXTRACTED_DATA` or `PROFILE_ACTION`）がチャンク境界で分割される問題に対応:
+- モードに応じてフィルタリング対象を切替（profile_building → `EXTRACTED_DATA`、その他 → `PROFILE_ACTION`）
+- `insideMarker` フラグで状態管理
 - `pendingBuffer` で部分的な `<!--` マーカーを保持
 - チャンク単位の正規表現ではなく、ステートマシン方式で確実にフィルタリング
 
@@ -338,7 +393,7 @@ src/
 │   │       └── v2/
 │   │           ├── route.ts           # 非ストリーミングAPI
 │   │           ├── stream/route.ts    # ストリーミングAPI（メイン）
-│   │           └── session/route.ts   # セッション管理API
+│   │           └── session/route.ts   # セッション管理API + Profile Analyzer統合
 │   ├── help/
 │   │   └── page.tsx                   # FAQ/ヘルプページ
 │   └── health-profile/
@@ -347,8 +402,15 @@ src/
 │   └── health-profile/
 │       └── ChatHearingV2.tsx          # チャットUIコンポーネント
 ├── constants/
-│   └── health-profile.ts             # 11カテゴリ定義
+│   ├── health-profile.ts             # 11カテゴリ定義
+│   └── health-questions.ts           # 169問の質問マスターデータ
 └── lib/
+    ├── agents/                        # 3エージェントパイプライン
+    │   ├── types.ts                   # 共有型定義
+    │   ├── profile-analyzer.ts        # Stage 1: プロフィール分析AI
+    │   ├── hearing-agent.ts           # Stage 2: ヒアリングAI
+    │   └── profile-editor.ts          # Stage 3: プロフィール編集AI
+    ├── chat-prompts.ts                # モード別プロンプト + 共通ユーティリティ
     ├── google-docs.ts                 # Google Docs読み書き
     └── prisma.ts                      # Prismaクライアント
 ```
@@ -362,7 +424,10 @@ src/
 id: UUID
 userId: UUID (FK → User)
 status: 'active' | 'paused' | 'completed'
+mode: 'profile_building' | 'data_analysis' | 'help' | null
 currentPriority: Int
+currentQuestionId: String?
+currentSectionId: String?
 createdAt: DateTime
 updatedAt: DateTime
 ```
@@ -395,12 +460,19 @@ createdAt: DateTime
 5. 設定ページへの誘導
 6. セッション再開フロー
 
-### Phase 3: 改善（次回以降）
-1. コンテキストキャッシング最適化
-2. 重複検出アルゴリズムの精緻化
-3. ユーザーフィードバックループ
+### Phase 3: 3エージェントパイプライン ✅
+1. Profile Analyzer: プロフィール重複・矛盾検出 + 未入力質問リスト
+2. Hearing AI: 1問集中型ヒアリング（プロンプト~800トークンに削減）
+3. Profile Editor: ADD/UPDATE判定特化の編集AI
+4. 番号選択メニュー廃止 → プロフィール未完成時は即質問開始
+5. フロントエンドにアナライザー検出結果のバナー表示UI追加
 
-### Phase 4: 高度化（将来）
+### Phase 4: 改善（次回以降）
+1. コンテキストキャッシング最適化
+2. ユーザーフィードバックループ
+3. アナライザー結果を活用した自動整理提案
+
+### Phase 5: 高度化（将来）
 1. Gemini 2.5への移行
 2. 外部データの自動統合
 3. 予測的な健康提案
@@ -409,14 +481,17 @@ createdAt: DateTime
 
 ## 期待される改善効果
 
-| 問題 | v1 | v2 |
-|------|-----|-----|
-| 重複質問 | 頻発 | プロフィール全文を参照するため発生しない |
-| 重複情報 | 放置 | AI が検出して解決を提案 |
-| 古い情報 | 放置 | 診断記録と比較して検出 |
-| 固定質問 | 硬直的 | AI が状況に応じて柔軟に対話 |
-| コンテキスト | 断片的 | 全情報を把握して回答 |
-| 健康分析 | なし | データに基づく分析・アドバイス |
-| 使い方サポート | なし | FAQ情報をもとにチャット内で回答 |
-| リアルタイム性 | 一括応答 | SSEストリーミング |
-| ウェルカム | 固定 | データ状態に応じて動的生成 |
+| 問題 | v1 | v2 | v2.1 (3エージェント) |
+|------|-----|-----|-----|
+| 重複質問 | 頻発 | プロフィール全文参照 | 該当セクションのみ参照で集中 |
+| 重複情報 | 放置 | AIが検出（不安定） | 専用Analyzerで確実に検出 |
+| プロンプト肥大化 | - | 3000-5000トークン | ~800-1000トークン |
+| 番号メニュー | - | 5-11個の番号選択 | 未完成時は即質問開始 |
+| ADD/UPDATE判定 | - | 1つのLLMに全責任 | 専用Editorで精密判定 |
+| 古い情報 | 放置 | 診断記録と比較 | Analyzerが事前検出 |
+| 固定質問 | 硬直的 | AI が柔軟に対話 | 質問マスター+AI柔軟性の両立 |
+| コンテキスト | 断片的 | 全情報を把握 | 役割別に最適化されたコンテキスト |
+| 健康分析 | なし | データ分析・アドバイス | 同左 |
+| 使い方サポート | なし | FAQ情報から回答 | 同左 |
+| リアルタイム性 | 一括応答 | SSEストリーミング | 同左 |
+| ウェルカム | 固定 | 動的生成 | 動的生成+最初の質問を即表示 |
