@@ -86,6 +86,20 @@ function buildResumeMessage(): string {
     return `お帰りなさい！前回の続きから再開しますね。`;
 }
 
+/**
+ * 検出された重複・矛盾をウェルカムメッセージに組み込む
+ */
+function formatIssuesForWelcome(issues: import('@/lib/agents/types').ProfileIssue[]): string {
+    const typeLabel = { DUPLICATE: '重複', CONFLICT: '矛盾', OUTDATED: '古い情報' } as const;
+
+    const issueLines = issues.map((issue, i) => {
+        const label = typeLabel[issue.type] || issue.type;
+        return `${i + 1}. **${label}**: ${issue.description}\n   → ${issue.suggestedResolution}`;
+    }).join('\n');
+
+    return `\n\nプロフィールを確認したところ、以下の問題が見つかりました：\n\n${issueLines}\n\n最新の状態に整理してもよいですか？「はい」と答えていただければ修正します。`;
+}
+
 // ============================================
 // GET: セッション取得/新規作成
 // ============================================
@@ -152,8 +166,10 @@ export async function GET(req: NextRequest) {
                         answeredQuestionIds: answeredIds,
                     });
 
-                    // 最初の質問を取得
-                    if (analyzerResult.missingQuestions.length > 0) {
+                    // 重複・矛盾がある場合は先に整理提案、なければ最初の質問を取得
+                    if (analyzerResult.issues.length > 0) {
+                        firstQuestionText = formatIssuesForWelcome(analyzerResult.issues);
+                    } else if (analyzerResult.missingQuestions.length > 0) {
                         const firstQ = analyzerResult.missingQuestions[0];
                         const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(
                             c => c.id === firstQ.sectionId

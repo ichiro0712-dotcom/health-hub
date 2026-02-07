@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    const { message, sessionId } = await req.json();
+    const { message, sessionId, analyzerIssues } = await req.json();
 
     if (!message || typeof message !== 'string' || !message.trim()) {
         return new Response(JSON.stringify({ error: 'メッセージが必要です' }), {
@@ -210,17 +210,54 @@ export async function POST(req: NextRequest) {
         });
     }
 
+    // issue整理の承認/拒否を検出
+    const isIssueConfirmation = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0
+        && /^(はい|うん|OK|オッケー|お願い|実行|やって)$/i.test(userMessage.trim());
+    const isIssueRejection = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0
+        && /^(いいえ|いや|やめ|キャンセル|だめ|スキップ)$/i.test(userMessage.trim());
+
     // モードに応じてコンテキストを取得し、システムプロンプトを生成
     let profileContent = '';
     let recordsContent = '';
     let systemPrompt = '';
     let hearingInput: HearingAgentInput | null = null;
     const isProfileBuilding = currentMode === 'profile_building';
+    // issue整理で実行されたアクション（ストリーム完了時にフロントに返す）
+    let issueExecutedActions: ProfileAction[] = [];
 
     if (isProfileBuilding) {
         // プロフィール構築: ヒアリングエージェントのプロンプトを構築
         const profileResult = await readHealthProfileFromGoogleDocs();
         profileContent = profileResult.success ? profileResult.content || '' : '';
+
+        // issue整理の承認時: suggestedActionを実行してからプロフィールを再読み込み
+        if (isIssueConfirmation) {
+            for (const issue of analyzerIssues) {
+                if (issue.suggestedAction && issue.suggestedAction.type !== 'NONE') {
+                    const result = await executeProfileAction(user.id, issue.suggestedAction);
+                    if (result.success) {
+                        issueExecutedActions.push(issue.suggestedAction);
+                    }
+                }
+            }
+            // 実行後にGoogle Docsを同期 & プロフィールを再読み込み
+            if (issueExecutedActions.length > 0) {
+                const allSections = await prisma.healthProfileSection.findMany({
+                    where: { userId: user.id },
+                    orderBy: { orderIndex: 'asc' }
+                });
+                await syncHealthProfileToGoogleDocs(
+                    allSections.map(s => ({
+                        categoryId: s.categoryId,
+                        title: s.title,
+                        content: s.content,
+                        orderIndex: s.orderIndex
+                    }))
+                );
+                const refreshed = await readHealthProfileFromGoogleDocs();
+                profileContent = refreshed.success ? refreshed.content || '' : profileContent;
+            }
+        }
 
         hearingInput = await getHearingContext(
             user.id,
@@ -235,6 +272,11 @@ export async function POST(req: NextRequest) {
                 content: m.content
             }));
             hearingInput.conversationHistory = summarizeHistory(rawHistory);
+            // issue整理の承認/拒否でない場合のみissuesを渡す（承認済みなら不要）
+            if (!isIssueConfirmation && !isIssueRejection
+                && analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0) {
+                hearingInput.issuesForUser = analyzerIssues;
+            }
             systemPrompt = buildHearingSystemPrompt(hearingInput);
         } else {
             // 質問が尽きた場合はフォールバック
@@ -495,8 +537,11 @@ export async function POST(req: NextRequest) {
                     ]
                 });
 
-                // Google Docs同期（アクション実行時のみ）
-                let syncStatus = 'not_needed';
+                // issue整理で実行されたアクションもマージ
+                const allExecutedActions = [...issueExecutedActions, ...executedActions];
+
+                // Google Docs同期（アクション実行時のみ。issue整理は実行済みなのでeditor分のみ）
+                let syncStatus = issueExecutedActions.length > 0 ? 'synced' : 'not_needed';
                 if (executedActions.length > 0) {
                     try {
                         const allSections = await prisma.healthProfileSection.findMany({
@@ -523,7 +568,7 @@ export async function POST(req: NextRequest) {
                     done: true,
                     sessionId: sessionIdForClosure,
                     mode: updatedMode,
-                    executedActions,
+                    executedActions: allExecutedActions,
                     pendingActions,
                     detectedIssues,
                     syncStatus

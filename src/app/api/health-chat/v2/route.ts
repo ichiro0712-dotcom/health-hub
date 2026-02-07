@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
         }
 
         // リクエストボディ
-        const { message, sessionId, pendingActionsToExecute } = await req.json();
+        const { message, sessionId, pendingActionsToExecute, analyzerIssues } = await req.json();
 
         if (!message || typeof message !== 'string' || !message.trim()) {
             return NextResponse.json(ERROR_CODES.CHAT_004, { status: ERROR_CODES.CHAT_004.status });
@@ -283,6 +283,9 @@ export async function POST(req: NextRequest) {
         // 確認応答の検出（pendingActions実行）
         const isConfirmation = /^(はい|うん|OK|オッケー|お願い|実行|やって)$/i.test(userMessage.trim());
         const isRejection = /^(いいえ|いや|やめ|キャンセル|だめ)$/i.test(userMessage.trim());
+
+        // issue整理の承認検出
+        const hasAnalyzerIssues = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0;
 
         // セッション取得または作成
         let session = sessionId
@@ -340,6 +343,67 @@ export async function POST(req: NextRequest) {
                 pendingActions: [],
                 syncStatus: syncResult.success ? 'synced' : 'failed',
                 syncError: syncResult.error
+            });
+        }
+
+        // issue整理の承認処理（analyzerIssuesのsuggestedActionを実行）
+        if (hasAnalyzerIssues && isConfirmation && !(pendingActionsToExecute && pendingActionsToExecute.length > 0)) {
+            const executedActions: ProfileAction[] = [];
+
+            for (const issue of analyzerIssues) {
+                if (issue.suggestedAction && issue.suggestedAction.type !== 'NONE') {
+                    const result = await executeProfileAction(user.id, issue.suggestedAction);
+                    if (result.success) {
+                        executedActions.push(issue.suggestedAction);
+                    }
+                }
+            }
+
+            const syncResult = await syncToGoogleDocsWithNotification(user.id);
+
+            const confirmResponse = executedActions.length > 0
+                ? `✅ プロフィールの重複・矛盾を${executedActions.length}件整理しました。\n\nそれでは、プロフィールの続きを進めますね。`
+                : 'プロフィールの整理は不要でした。続きを進めますね。';
+
+            await prisma.healthChatMessage.createMany({
+                data: [
+                    { sessionId: session.id, role: 'user', content: userMessage },
+                    { sessionId: session.id, role: 'assistant', content: confirmResponse }
+                ]
+            });
+
+            return NextResponse.json({
+                success: true,
+                response: confirmResponse,
+                sessionId: session.id,
+                mode: session.mode,
+                sessionStatus: 'active',
+                executedActions,
+                pendingActions: [],
+                syncStatus: syncResult.success ? 'synced' : 'failed',
+                syncError: syncResult.error
+            });
+        }
+
+        // issue整理の拒否処理
+        if (hasAnalyzerIssues && isRejection && !(pendingActionsToExecute && pendingActionsToExecute.length > 0)) {
+            const rejectResponse = '了解しました。そのまま進めますね。';
+
+            await prisma.healthChatMessage.createMany({
+                data: [
+                    { sessionId: session.id, role: 'user', content: userMessage },
+                    { sessionId: session.id, role: 'assistant', content: rejectResponse }
+                ]
+            });
+
+            return NextResponse.json({
+                success: true,
+                response: rejectResponse,
+                sessionId: session.id,
+                mode: session.mode,
+                sessionStatus: 'active',
+                executedActions: [],
+                pendingActions: []
             });
         }
 
@@ -463,6 +527,9 @@ export async function POST(req: NextRequest) {
                     existingSectionContent: sectionContent,
                     conversationHistory: summarizeHistory(rawHistory),
                     isFirstQuestion: messageCount === 0,
+                    issuesForUser: analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0
+                        ? analyzerIssues
+                        : undefined,
                 };
 
                 systemPrompt = buildHearingSystemPrompt(hearingInput);

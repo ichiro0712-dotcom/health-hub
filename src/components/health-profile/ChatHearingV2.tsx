@@ -39,7 +39,9 @@ interface ProfileIssue {
   type: 'DUPLICATE' | 'CONFLICT' | 'OUTDATED';
   sectionId: string;
   description: string;
-  suggestedFix: string;
+  existingTexts: string[];
+  suggestedResolution: string;
+  suggestedAction: ProfileAction;
 }
 
 interface SessionContext {
@@ -316,6 +318,9 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         if (data.executedActions && data.executedActions.length > 0) {
           setHasUpdates(true);
           onContentUpdated?.();
+          if (analyzerIssues.length > 0) {
+            setAnalyzerIssues([]);
+          }
         }
 
         if (data.syncStatus === 'failed') {
@@ -352,7 +357,8 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: messageToSend,
-          sessionId
+          sessionId,
+          analyzerIssues: analyzerIssues.length > 0 ? analyzerIssues : undefined,
         }),
         signal: controller.signal
       });
@@ -411,6 +417,10 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
                 if (data.executedActions && data.executedActions.length > 0) {
                   setHasUpdates(true);
                   onContentUpdated?.();
+                  // issue整理のアクションが実行されたらissuesをクリア
+                  if (analyzerIssues.length > 0) {
+                    setAnalyzerIssues([]);
+                  }
                 }
 
                 if (data.syncStatus === 'failed') {
