@@ -346,24 +346,23 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // issue整理の承認処理（analyzerIssuesのsuggestedActionを実行）
+        // issue整理の承認処理（1件目のsuggestedActionのみ実行）
         if (hasAnalyzerIssues && isConfirmation && !(pendingActionsToExecute && pendingActionsToExecute.length > 0)) {
             const executedActions: ProfileAction[] = [];
+            const currentIssue = analyzerIssues[0];
 
-            for (const issue of analyzerIssues) {
-                if (issue.suggestedAction && issue.suggestedAction.type !== 'NONE') {
-                    const result = await executeProfileAction(user.id, issue.suggestedAction);
-                    if (result.success) {
-                        executedActions.push(issue.suggestedAction);
-                    }
+            if (currentIssue?.suggestedAction && currentIssue.suggestedAction.type !== 'NONE') {
+                const result = await executeProfileAction(user.id, currentIssue.suggestedAction);
+                if (result.success) {
+                    executedActions.push(currentIssue.suggestedAction);
                 }
             }
 
             const syncResult = await syncToGoogleDocsWithNotification(user.id);
 
             const confirmResponse = executedActions.length > 0
-                ? `✅ プロフィールの重複・矛盾を${executedActions.length}件整理しました。\n\nそれでは、プロフィールの続きを進めますね。`
-                : 'プロフィールの整理は不要でした。続きを進めますね。';
+                ? `✅ 修正しました。`
+                : '修正は不要でした。';
 
             await prisma.healthChatMessage.createMany({
                 data: [
@@ -380,14 +379,15 @@ export async function POST(req: NextRequest) {
                 sessionStatus: 'active',
                 executedActions,
                 pendingActions: [],
+                issueProcessed: true,
                 syncStatus: syncResult.success ? 'synced' : 'failed',
                 syncError: syncResult.error
             });
         }
 
-        // issue整理の拒否処理
+        // issue整理の拒否処理（1件スキップ）
         if (hasAnalyzerIssues && isRejection && !(pendingActionsToExecute && pendingActionsToExecute.length > 0)) {
-            const rejectResponse = '了解しました。そのまま進めますね。';
+            const rejectResponse = 'スキップしました。';
 
             await prisma.healthChatMessage.createMany({
                 data: [
@@ -403,7 +403,8 @@ export async function POST(req: NextRequest) {
                 mode: session.mode,
                 sessionStatus: 'active',
                 executedActions: [],
-                pendingActions: []
+                pendingActions: [],
+                issueProcessed: true,
             });
         }
 

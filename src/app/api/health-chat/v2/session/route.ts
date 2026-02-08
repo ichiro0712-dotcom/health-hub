@@ -87,17 +87,36 @@ function buildResumeMessage(): string {
 }
 
 /**
- * 検出された重複・矛盾をウェルカムメッセージに組み込む
+ * 1件目のissueをウェルカムメッセージに組み込む（1件ずつ確認方式）
  */
-function formatIssuesForWelcome(issues: import('@/lib/agents/types').ProfileIssue[]): string {
+function formatFirstIssueForWelcome(issues: import('@/lib/agents/types').ProfileIssue[]): string {
+    if (issues.length === 0) return '';
+
+    const issue = issues[0];
     const typeLabel = { DUPLICATE: '重複', CONFLICT: '矛盾', OUTDATED: '古い情報' } as const;
+    const label = typeLabel[issue.type] || issue.type;
+    const action = issue.suggestedAction;
 
-    const issueLines = issues.map((issue, i) => {
-        const label = typeLabel[issue.type] || issue.type;
-        return `${i + 1}. **${label}**: ${issue.description}\n   → ${issue.suggestedResolution}`;
-    }).join('\n');
+    let text = `\n\nプロフィールに**${label}**が見つかりました（1/${issues.length}件）：\n\n`;
+    text += `${issue.description}\n\n`;
 
-    return `\n\nプロフィールを確認したところ、以下の問題が見つかりました：\n\n${issueLines}\n\n最新の状態に整理してもよいですか？「はい」と答えていただければ修正します。`;
+    if (action && action.type !== 'NONE') {
+        if (action.type === 'DELETE') {
+            text += `**修正案**: 以下を削除します\n`;
+            text += `「${action.target_text}」\n\n`;
+        } else if (action.type === 'UPDATE') {
+            text += `**修正案**: 以下のように更新します\n`;
+            if (action.target_text) {
+                text += `変更前: 「${action.target_text}」\n`;
+            }
+            text += `変更後: 「${action.new_text}」\n\n`;
+        }
+        text += `こう修正しますか？「はい」で修正、「スキップ」で次へ進みます。`;
+    } else {
+        text += `→ ${issue.suggestedResolution}`;
+    }
+
+    return text;
 }
 
 // ============================================
@@ -188,7 +207,7 @@ export async function GET(req: NextRequest) {
 
                     // 重複・矛盾がある場合は先に整理提案、なければ最初の質問を取得
                     if (analyzerResult.issues.length > 0) {
-                        firstQuestionText = formatIssuesForWelcome(analyzerResult.issues);
+                        firstQuestionText = formatFirstIssueForWelcome(analyzerResult.issues);
                     } else if (analyzerResult.missingQuestions.length > 0) {
                         const firstQ = analyzerResult.missingQuestions[0];
                         const sectionTitle = DEFAULT_PROFILE_CATEGORIES.find(

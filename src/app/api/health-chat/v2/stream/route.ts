@@ -210,10 +210,11 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // issue整理の承認/拒否を検出
-    const isIssueConfirmation = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0
+    // issue整理の承認/拒否を検出（フロントから1件のみ送られてくる）
+    const hasCurrentIssue = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0;
+    const isIssueConfirmation = hasCurrentIssue
         && /^(はい|うん|OK|オッケー|お願い|実行|やって)$/i.test(userMessage.trim());
-    const isIssueRejection = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0
+    const isIssueRejection = hasCurrentIssue
         && /^(いいえ|いや|やめ|キャンセル|だめ|スキップ)$/i.test(userMessage.trim());
 
     // モードに応じてコンテキストを取得し、システムプロンプトを生成
@@ -230,14 +231,13 @@ export async function POST(req: NextRequest) {
         const profileResult = await readHealthProfileFromGoogleDocs();
         profileContent = profileResult.success ? profileResult.content || '' : '';
 
-        // issue整理の承認時: suggestedActionを実行してからプロフィールを再読み込み
+        // issue整理の承認時: 1件目のsuggestedActionのみ実行
         if (isIssueConfirmation) {
-            for (const issue of analyzerIssues) {
-                if (issue.suggestedAction && issue.suggestedAction.type !== 'NONE') {
-                    const result = await executeProfileAction(user.id, issue.suggestedAction);
-                    if (result.success) {
-                        issueExecutedActions.push(issue.suggestedAction);
-                    }
+            const currentIssue = analyzerIssues[0];
+            if (currentIssue?.suggestedAction && currentIssue.suggestedAction.type !== 'NONE') {
+                const result = await executeProfileAction(user.id, currentIssue.suggestedAction);
+                if (result.success) {
+                    issueExecutedActions.push(currentIssue.suggestedAction);
                 }
             }
             // 実行後にGoogle Docsを同期 & プロフィールを再読み込み
@@ -571,7 +571,9 @@ export async function POST(req: NextRequest) {
                     executedActions: allExecutedActions,
                     pendingActions,
                     detectedIssues,
-                    syncStatus
+                    syncStatus,
+                    // issue処理フラグ（フロントが次のissueに進むために使用）
+                    issueProcessed: isIssueConfirmation || isIssueRejection,
                 })}\n\n`));
 
             } catch (error) {

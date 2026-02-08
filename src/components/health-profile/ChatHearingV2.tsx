@@ -92,6 +92,33 @@ function renderLineWithLinks(line: string, lineIndex: number): React.ReactNode {
   return parts.length > 0 ? parts : line;
 }
 
+// 1件のissueに対する整理提案メッセージを生成
+function buildSingleIssueProposal(issue: ProfileIssue, current: number, total: number): string {
+  const label = issue.type === 'DUPLICATE' ? '重複' : issue.type === 'CONFLICT' ? '矛盾' : '古い情報';
+  const action = issue.suggestedAction;
+
+  let proposalText = `プロフィールに**${label}**が見つかりました（${current}/${total}件）：\n\n`;
+  proposalText += `${issue.description}\n\n`;
+
+  if (action && action.type !== 'NONE') {
+    if (action.type === 'DELETE') {
+      proposalText += `**修正案**: 以下を削除します\n`;
+      proposalText += `「${action.target_text}」\n\n`;
+    } else if (action.type === 'UPDATE') {
+      proposalText += `**修正案**: 以下のように更新します\n`;
+      if (action.target_text) {
+        proposalText += `変更前: 「${action.target_text}」\n`;
+      }
+      proposalText += `変更後: 「${action.new_text}」\n\n`;
+    }
+    proposalText += `こう修正しますか？「はい」で修正、「スキップ」で次へ進みます。`;
+  } else {
+    proposalText += `→ ${issue.suggestedResolution}`;
+  }
+
+  return proposalText;
+}
+
 export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearingV2Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -106,6 +133,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
   const [syncError, setSyncError] = useState<string | null>(null);
   const [chatMode, setChatMode] = useState<string | null>(null);
   const [analyzerIssues, setAnalyzerIssues] = useState<ProfileIssue[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -155,6 +183,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
   useEffect(() => {
     const startChat = async () => {
       setIsInitializing(true);
+      setIsAnalyzing(true);
       try {
         const res = await fetch('/api/health-chat/v2/session');
         if (!res.ok) throw new Error('Failed to start session');
@@ -176,6 +205,15 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
             role: m.role,
             content: m.content
           }));
+          // セッション再開時にissuesがあれば1件目の整理提案メッセージを追加
+          if (data.analyzerResult?.issues?.length > 0) {
+            const firstIssue = data.analyzerResult.issues[0] as ProfileIssue;
+            restoredMessages.push({
+              id: generateMessageId(),
+              role: 'assistant',
+              content: buildSingleIssueProposal(firstIssue, 1, data.analyzerResult.issues.length)
+            });
+          }
           setMessages(restoredMessages);
         } else {
           setMessages([{
@@ -193,6 +231,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         toast.error('チャットの開始に失敗しました');
       } finally {
         setIsInitializing(false);
+        setIsAnalyzing(false);
       }
     };
 
@@ -206,6 +245,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
     }
 
     setIsInitializing(true);
+    setIsAnalyzing(true);
     setPendingActions([]);
 
     try {
@@ -235,16 +275,43 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
       toast.error('新規セッションの開始に失敗しました');
     } finally {
       setIsInitializing(false);
+      setIsAnalyzing(false);
     }
   };
 
-  // 手動同期ボタン
+  // 手動同期ボタン（同期 + プロフィールチェック）
   const handleManualSync = async () => {
     const newContext = await syncGoogleDocs();
-    if (newContext) {
-      toast.success('データを同期しました');
-    } else {
+    if (!newContext) {
       toast.error('同期に失敗しました');
+      return;
+    }
+    toast.success('データを同期しました');
+
+    // 同期後にプロフィールチェック（Analyzer）を実行
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch(`/api/health-chat/v2/session/analyze`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.analyzerResult?.issues?.length > 0) {
+          const issues = data.analyzerResult.issues as ProfileIssue[];
+          setAnalyzerIssues(issues);
+          // 1件目の整理提案メッセージをチャットに追加
+          setMessages(prev => [...prev, {
+            id: generateMessageId(),
+            role: 'assistant' as const,
+            content: buildSingleIssueProposal(issues[0], 1, issues.length)
+          }]);
+        } else {
+          setAnalyzerIssues([]);
+          toast.success('プロフィールに問題は見つかりませんでした');
+        }
+      }
+    } catch (error) {
+      console.error('Analyzer error:', error);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -277,8 +344,8 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
     setMessages(prev => [...prev, { id: userMessageId, role: 'user', content: messageToSend }]);
     setIsLoading(true);
 
-    // pendingActionsがある場合の確認/拒否は通常APIを使用
-    if (pendingActions.length > 0) {
+    // pendingActionsがある場合 or analyzerIssues確認/拒否は通常APIを使用
+    if (pendingActions.length > 0 || analyzerIssues.length > 0) {
       try {
         const res = await fetch('/api/health-chat/v2', {
           method: 'POST',
@@ -286,7 +353,9 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
           body: JSON.stringify({
             message: messageToSend,
             sessionId,
-            pendingActionsToExecute: pendingActions
+            pendingActionsToExecute: pendingActions.length > 0 ? pendingActions : undefined,
+            // 1件目のissueのみ送信（1件ずつ処理）
+            analyzerIssues: analyzerIssues.length > 0 ? [analyzerIssues[0]] : undefined,
           })
         });
 
@@ -318,8 +387,19 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         if (data.executedActions && data.executedActions.length > 0) {
           setHasUpdates(true);
           onContentUpdated?.();
-          if (analyzerIssues.length > 0) {
-            setAnalyzerIssues([]);
+        }
+
+        // issue処理後: 1件目を消して次のissueを提案（または完了）
+        if (data.issueProcessed && analyzerIssues.length > 0) {
+          const remaining = analyzerIssues.slice(1);
+          setAnalyzerIssues(remaining);
+          if (remaining.length > 0) {
+            const nextIdx = analyzerIssues.length - remaining.length;
+            setMessages(prev => [...prev, {
+              id: generateMessageId(),
+              role: 'assistant' as const,
+              content: buildSingleIssueProposal(remaining[0], nextIdx + 1, analyzerIssues.length)
+            }]);
           }
         }
 
@@ -358,7 +438,8 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         body: JSON.stringify({
           message: messageToSend,
           sessionId,
-          analyzerIssues: analyzerIssues.length > 0 ? analyzerIssues : undefined,
+          // 1件目のissueのみ送信（1件ずつ処理）
+          analyzerIssues: analyzerIssues.length > 0 ? [analyzerIssues[0]] : undefined,
         }),
         signal: controller.signal
       });
@@ -417,9 +498,20 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
                 if (data.executedActions && data.executedActions.length > 0) {
                   setHasUpdates(true);
                   onContentUpdated?.();
-                  // issue整理のアクションが実行されたらissuesをクリア
-                  if (analyzerIssues.length > 0) {
-                    setAnalyzerIssues([]);
+                }
+
+                // issue処理後: 1件目を消して次のissueを提案（または完了）
+                if (data.issueProcessed && analyzerIssues.length > 0) {
+                  const remaining = analyzerIssues.slice(1);
+                  setAnalyzerIssues(remaining);
+                  if (remaining.length > 0) {
+                    // 次のissueを提案
+                    const nextIdx = analyzerIssues.length - remaining.length;
+                    setMessages(prev => [...prev, {
+                      id: generateMessageId(),
+                      role: 'assistant' as const,
+                      content: buildSingleIssueProposal(remaining[0], nextIdx + 1, analyzerIssues.length)
+                    }]);
                   }
                 }
 
@@ -487,9 +579,9 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
           {/* 同期ボタン */}
           <button
             onClick={handleManualSync}
-            disabled={isSyncing || isInitializing || isLoading}
+            disabled={isSyncing || isAnalyzing || isInitializing || isLoading}
             className="flex items-center gap-1 px-2 py-1 hover:bg-teal-600 dark:hover:bg-teal-700 rounded transition-colors text-xs"
-            title={context?.synced ? 'データ同期済み' : 'Google Docsと同期'}
+            title={context?.synced ? 'データ同期済み（プロフィールチェックも実行）' : 'Google Docsと同期 + プロフィールチェック'}
           >
             {isSyncing ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -551,6 +643,14 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2 flex-shrink-0">
           <Loader2 className="w-3 h-3 animate-spin" />
           Google Docsからデータを読み込み中...
+        </div>
+      )}
+
+      {/* プロフィールチェック中バー */}
+      {isAnalyzing && (
+        <div className="px-4 py-2 bg-purple-50 dark:bg-purple-900/30 border-b border-purple-200 dark:border-purple-700 text-xs text-purple-700 dark:text-purple-300 flex items-center gap-2 flex-shrink-0">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          健康プロフィールをチェック中...
         </div>
       )}
 
