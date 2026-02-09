@@ -320,8 +320,8 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
     setMessages(prev => [...prev, { id: userMessageId, role: 'user', content: messageToSend }]);
     setIsLoading(true);
 
-    // pendingActionsがある場合 or analyzerIssues確認/拒否は通常APIを使用
-    if (pendingActions.length > 0 || analyzerIssues.length > 0) {
+    // pendingActionsがある場合のみ通常APIを使用（analyzerIssuesはストリーミングAPIでAIが自然言語処理）
+    if (pendingActions.length > 0) {
       try {
         const res = await fetch('/api/health-chat/v2', {
           method: 'POST',
@@ -329,9 +329,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
           body: JSON.stringify({
             message: messageToSend,
             sessionId,
-            pendingActionsToExecute: pendingActions.length > 0 ? pendingActions : undefined,
-            // 1件目のissueのみ送信（1件ずつ処理）
-            analyzerIssues: analyzerIssues.length > 0 ? [analyzerIssues[0]] : undefined,
+            pendingActionsToExecute: pendingActions,
           })
         });
 
@@ -363,20 +361,6 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
         if (data.executedActions && data.executedActions.length > 0) {
           setHasUpdates(true);
           onContentUpdated?.();
-        }
-
-        // issue処理後: 1件目を消して次のissueを提案（または完了）
-        if (data.issueProcessed && analyzerIssues.length > 0) {
-          const remaining = analyzerIssues.slice(1);
-          setAnalyzerIssues(remaining);
-          if (remaining.length > 0) {
-            const nextIdx = analyzerIssues.length - remaining.length + 1;
-            setMessages(prev => [...prev, {
-              id: generateMessageId(),
-              role: 'assistant' as const,
-              content: buildSingleIssueProposal(remaining[0], nextIdx, analyzerIssues.length)
-            }]);
-          }
         }
 
         if (data.syncStatus === 'failed') {
