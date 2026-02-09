@@ -12,51 +12,43 @@ import prisma from '@/lib/prisma';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
 import { getAnsweredQuestionIds } from '@/lib/chat-prompts';
 import { analyzeProfile } from '@/lib/agents/profile-analyzer';
-import { getNextQuestion } from '@/constants/health-questions';
+import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import {
     readHealthProfileFromGoogleDocs,
     readRecordsFromGoogleDocs
 } from '@/lib/google-docs';
 
 // ============================================
-// データ状態の検出
+// データ状態の検出（質問リストベース）
 // ============================================
 
 interface DataStatus {
-    profileFilledCount: number;
-    profileTotalCount: number;
-    missingSectionNames: string[];
+    /** 回答済み質問数 */
+    answeredQuestionCount: number;
+    /** 全質問数（HEALTH_QUESTIONS） */
+    totalQuestionCount: number;
+    /** プロフィールが完成しているか（全質問回答済み） */
+    isProfileComplete: boolean;
     hasRecords: boolean;
     hasFitbit: boolean;
     hasGoogleDocs: boolean;
 }
 
 async function detectDataStatus(userId: string): Promise<DataStatus> {
-    const [profileSections, recordCount, fitbitAccount, googleDocsSettings] = await Promise.all([
-        prisma.healthProfileSection.findMany({
-            where: { userId },
-            select: { categoryId: true, content: true }
-        }),
+    const [answeredIds, recordCount, fitbitAccount, googleDocsSettings] = await Promise.all([
+        getAnsweredQuestionIds(userId),
         prisma.healthRecord.count({ where: { userId } }),
         prisma.fitbitAccount.findUnique({ where: { userId } }),
         prisma.googleDocsSettings.findUnique({ where: { userId } }),
     ]);
 
-    // 実際にcontentが入っているセクションのみカウント
-    const filledSectionIds = new Set(
-        profileSections
-            .filter(s => s.content && s.content.trim().length > 0)
-            .map(s => s.categoryId)
-    );
-
-    const missingSectionNames = DEFAULT_PROFILE_CATEGORIES
-        .filter(cat => !filledSectionIds.has(cat.id))
-        .map(cat => cat.title.replace(/^\d+\.\s*/, '')); // 番号プレフィックスを除去
+    const totalQuestionCount = HEALTH_QUESTIONS.length;
+    const answeredQuestionCount = answeredIds.length;
 
     return {
-        profileFilledCount: filledSectionIds.size,
-        profileTotalCount: DEFAULT_PROFILE_CATEGORIES.length,
-        missingSectionNames,
+        answeredQuestionCount,
+        totalQuestionCount,
+        isProfileComplete: answeredQuestionCount >= totalQuestionCount,
         hasRecords: recordCount > 0,
         hasFitbit: !!fitbitAccount,
         hasGoogleDocs: !!googleDocsSettings,
@@ -68,18 +60,16 @@ async function detectDataStatus(userId: string): Promise<DataStatus> {
 // ============================================
 
 function buildWelcomeMessage(status: DataStatus): string {
-    const hasProfileGap = status.profileFilledCount < status.profileTotalCount;
-
-    // プロフィール未完成 → メニューなしで即プロフィール構築開始
-    if (hasProfileGap) {
-        if (status.profileFilledCount === 0) {
-            return 'こんにちは！H-Hubアシスタントです。\n\n健康プロフィールを充実させるために質問を進めさせてもらいますね。\n途中で辞めたいときは「ここまで保存して」と言ってください。';
+    // プロフィール未完成（未回答の質問がある）→ メニューなしで即プロフィール構築開始
+    if (!status.isProfileComplete) {
+        if (status.answeredQuestionCount === 0) {
+            return 'こんにちは！H-Hubアシスタントです。\n\n健康プロフィールを充実させるために質問を進めさせてもらいますね。\n\n途中で辞めたいときは「ここまで保存して」と言ってください。';
         }
-        return 'こんにちは！H-Hubアシスタントです。\n\nプロフィールの内容を確認して、足りないところから質問を進めさせてもらいますね。\n途中で辞めたいときは「ここまで保存して」と言ってください。';
+        return 'こんにちは！H-Hubアシスタントです。\n\nプロフィールの内容を確認して、足りないところから質問を進めさせてもらいますね。\n\n途中で辞めたいときは「ここまで保存して」と言ってください。';
     }
 
-    // プロフィール完成済み → シンプルな3択
-    return `こんにちは！H-Hubアシスタントです。\n\n健康プロフィールは充実しています！何をお手伝いしますか？\n\n１．健康プロフィールの更新\n２．健康データの分析・アドバイス\n３．使い方サポート`;
+    // プロフィール完成済み（全質問回答済み）→ シンプルな3択
+    return `こんにちは！H-Hubアシスタントです。\n\n健康プロフィールは充実しています！何をお手伝いしますか？\n\n１．健康プロフィールの更新\n\n２．健康データの分析・アドバイス\n\n３．使い方サポート`;
 }
 
 function buildResumeMessage(): string {
@@ -102,12 +92,12 @@ function formatFirstIssueForWelcome(issues: import('@/lib/agents/types').Profile
 
     if (action && action.type !== 'NONE') {
         if (action.type === 'DELETE') {
-            text += `**修正案**: 以下を削除します\n`;
+            text += `**修正案**: 以下を削除します\n\n`;
             text += `「${action.target_text}」\n\n`;
         } else if (action.type === 'UPDATE') {
-            text += `**修正案**: 以下のように更新します\n`;
+            text += `**修正案**: 以下のように更新します\n\n`;
             if (action.target_text) {
-                text += `変更前: 「${action.target_text}」\n`;
+                text += `変更前: 「${action.target_text}」\n\n`;
             }
             text += `変更後: 「${action.new_text}」\n\n`;
         }
@@ -154,10 +144,10 @@ export async function GET(req: NextRequest) {
             }
         });
 
-        // データ状態を検出
+        // データ状態を検出（質問リストベースで完成判定）
         const dataStatus = await detectDataStatus(user.id);
-        const hasProfile = dataStatus.profileFilledCount > 0;
-        const hasProfileGap = dataStatus.profileFilledCount < dataStatus.profileTotalCount;
+        const hasProfile = dataStatus.answeredQuestionCount > 0;
+        const hasProfileGap = !dataStatus.isProfileComplete;
 
         // ウェルカムメッセージを生成
         let welcomeMessage: string;
@@ -251,7 +241,7 @@ export async function GET(req: NextRequest) {
                 hasProfile,
                 hasRecords: dataStatus.hasRecords,
                 profileSummary: hasProfile
-                    ? `${dataStatus.profileFilledCount}/${dataStatus.profileTotalCount}セクション入力済み`
+                    ? `${dataStatus.answeredQuestionCount}/${dataStatus.totalQuestionCount}問回答済み`
                     : null,
                 synced: false  // まだ同期していない
             }

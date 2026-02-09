@@ -69,12 +69,12 @@ function buildSingleIssueProposal(issue: ProfileIssue, current: number, total: n
 
   if (action && action.type !== 'NONE') {
     if (action.type === 'DELETE') {
-      proposalText += `**修正案**: 以下を削除します\n`;
+      proposalText += `**修正案**: 以下を削除します\n\n`;
       proposalText += `「${action.target_text}」\n\n`;
     } else if (action.type === 'UPDATE') {
-      proposalText += `**修正案**: 以下のように更新します\n`;
+      proposalText += `**修正案**: 以下のように更新します\n\n`;
       if (action.target_text) {
-        proposalText += `変更前: 「${action.target_text}」\n`;
+        proposalText += `変更前: 「${action.target_text}」\n\n`;
       }
       proposalText += `変更後: 「${action.new_text}」\n\n`;
     }
