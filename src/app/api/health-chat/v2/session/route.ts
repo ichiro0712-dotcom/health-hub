@@ -164,26 +164,8 @@ export async function GET(req: NextRequest) {
         let analyzerResult = null;
 
         if (session && session.messages.length > 0) {
-            // 既存セッションを再開
+            // 既存セッションを再開（Analyzerは実行しない。新規セッション・手動同期・ユーザー要求時のみ実行）
             welcomeMessage = buildResumeMessage();
-
-            // 既存セッション再開時もプロフィールの重複・矛盾をチェック
-            if (hasProfileGap || hasProfile) {
-                try {
-                    const answeredIds = await getAnsweredQuestionIds(user.id);
-                    const profileResult = await readHealthProfileFromGoogleDocs();
-                    const profileContent = profileResult.success ? profileResult.content || '' : '';
-
-                    if (profileContent.length >= 20) {
-                        analyzerResult = await analyzeProfile({
-                            profileContent,
-                            answeredQuestionIds: answeredIds,
-                        });
-                    }
-                } catch (error) {
-                    console.error('[Session] Resume analyzer failed:', error);
-                }
-            }
         } else {
             // 新規セッション: プロフィール未完成時はアナライザー実行
             let firstQuestionText = '';

@@ -54,6 +54,7 @@ interface SessionContext {
 interface ChatHearingV2Props {
   onContentUpdated?: () => void;
   onClose?: () => void;
+  isVisible?: boolean;
 }
 
 // 内部リンクのパターン: → /path or /path 形式を検出
@@ -119,7 +120,7 @@ function buildSingleIssueProposal(issue: ProfileIssue, current: number, total: n
   return proposalText;
 }
 
-export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearingV2Props) {
+export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: ChatHearingV2Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -153,6 +154,16 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
     }
   }, [messages]);
 
+  // モーダル再表示時にスクロール位置を末尾に復元 + 入力欄にフォーカス
+  useEffect(() => {
+    if (isVisible && messagesContainerRef.current) {
+      requestAnimationFrame(() => {
+        messagesContainerRef.current!.scrollTop = messagesContainerRef.current!.scrollHeight;
+        inputRef.current?.focus();
+      });
+    }
+  }, [isVisible]);
+
   // アンマウント時にストリーミングをキャンセル
   useEffect(() => {
     return () => {
@@ -183,7 +194,6 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
   useEffect(() => {
     const startChat = async () => {
       setIsInitializing(true);
-      setIsAnalyzing(true);
       try {
         const res = await fetch('/api/health-chat/v2/session');
         if (!res.ok) throw new Error('Failed to start session');
@@ -194,28 +204,21 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         setContext(data.context);
         if (data.mode) setChatMode(data.mode);
 
-        // アナライザー結果（重複・矛盾の検出）
+        // アナライザー結果（新規セッション時のみ返される）
         if (data.analyzerResult?.issues?.length > 0) {
           setAnalyzerIssues(data.analyzerResult.issues);
         }
 
         if (data.messages && data.messages.length > 0) {
+          // 既存セッション再開（Analyzerは実行されない）
           const restoredMessages: Message[] = data.messages.map((m: { id: string; role: 'user' | 'assistant'; content: string }) => ({
             id: m.id || generateMessageId(),
             role: m.role,
             content: m.content
           }));
-          // セッション再開時にissuesがあれば1件目の整理提案メッセージを追加
-          if (data.analyzerResult?.issues?.length > 0) {
-            const firstIssue = data.analyzerResult.issues[0] as ProfileIssue;
-            restoredMessages.push({
-              id: generateMessageId(),
-              role: 'assistant',
-              content: buildSingleIssueProposal(firstIssue, 1, data.analyzerResult.issues.length)
-            });
-          }
           setMessages(restoredMessages);
         } else {
+          // 新規セッション: ウェルカムメッセージ表示
           setMessages([{
             id: generateMessageId(),
             role: 'assistant',
@@ -231,7 +234,6 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
         toast.error('チャットの開始に失敗しました');
       } finally {
         setIsInitializing(false);
-        setIsAnalyzing(false);
       }
     };
 
@@ -513,6 +515,17 @@ export default function ChatHearingV2({ onContentUpdated, onClose }: ChatHearing
                       content: buildSingleIssueProposal(remaining[0], nextIdx + 1, analyzerIssues.length)
                     }]);
                   }
+                }
+
+                // プロフィールチェック要求で新たにissuesが返された場合
+                if (data.analyzerIssues && data.analyzerIssues.length > 0) {
+                  const issues = data.analyzerIssues as ProfileIssue[];
+                  setAnalyzerIssues(issues);
+                  setMessages(prev => [...prev, {
+                    id: generateMessageId(),
+                    role: 'assistant' as const,
+                    content: buildSingleIssueProposal(issues[0], 1, issues.length)
+                  }]);
                 }
 
                 if (data.syncStatus === 'failed') {

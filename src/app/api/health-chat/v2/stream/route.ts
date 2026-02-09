@@ -30,6 +30,7 @@ import {
     CONFIDENCE_THRESHOLD_DEFAULT,
     CONFIDENCE_THRESHOLD_DELETE,
 } from '@/lib/chat-prompts';
+import { analyzeProfile } from '@/lib/agents/profile-analyzer';
 import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
 import { buildHearingSystemPrompt, parseExtractedData } from '@/lib/agents/hearing-agent';
@@ -208,6 +209,78 @@ export async function POST(req: NextRequest) {
             where: { id: session.id },
             data: { mode: currentMode }
         });
+    }
+
+    // プロフィールチェック要求を検出
+    const isProfileCheckRequest = /プロフィール.{0,4}(チェック|確認|整理|見直|診断)|重複.{0,4}(チェック|確認|整理)|矛盾.{0,4}(チェック|確認|整理)/.test(userMessage.trim());
+
+    // プロフィールチェック要求時はAnalyzerを実行して結果を返す
+    if (isProfileCheckRequest) {
+        const encoder = new TextEncoder();
+        const profileResult = await readHealthProfileFromGoogleDocs();
+        const profileContent = profileResult.success ? profileResult.content || '' : '';
+
+        // メッセージをDBに保存
+        await prisma.healthChatMessage.create({
+            data: { sessionId: session.id, role: 'user', content: userMessage }
+        });
+
+        if (profileContent.length < 20) {
+            const noDataMsg = 'プロフィールのデータがまだ少ないため、チェックできません。まずはプロフィールの入力を進めましょう！';
+            await prisma.healthChatMessage.create({
+                data: { sessionId: session.id, role: 'assistant', content: noDataMsg }
+            });
+            const stream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: noDataMsg })}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, sessionId: session.id, mode: currentMode })}\n\n`));
+                    controller.close();
+                }
+            });
+            return new Response(stream, {
+                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }
+            });
+        }
+
+        const answeredIds = await getAnsweredQuestionIds(user.id);
+        const analyzerResult = await analyzeProfile({ profileContent, answeredQuestionIds: answeredIds });
+
+        if (analyzerResult.issues.length > 0) {
+            const responseMsg = `プロフィールをチェックしました。${analyzerResult.issues.length}件の整理が必要な箇所が見つかりました。`;
+            await prisma.healthChatMessage.create({
+                data: { sessionId: session.id, role: 'assistant', content: responseMsg }
+            });
+            const stream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: responseMsg })}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                        done: true,
+                        sessionId: session.id,
+                        mode: currentMode,
+                        analyzerIssues: analyzerResult.issues,
+                    })}\n\n`));
+                    controller.close();
+                }
+            });
+            return new Response(stream, {
+                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }
+            });
+        } else {
+            const okMsg = 'プロフィールをチェックしました。重複や矛盾は見つかりませんでした！';
+            await prisma.healthChatMessage.create({
+                data: { sessionId: session.id, role: 'assistant', content: okMsg }
+            });
+            const stream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: okMsg })}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, sessionId: session.id, mode: currentMode })}\n\n`));
+                    controller.close();
+                }
+            });
+            return new Response(stream, {
+                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }
+            });
+        }
     }
 
     // issue整理の承認/拒否を検出（フロントから1件のみ送られてくる）
