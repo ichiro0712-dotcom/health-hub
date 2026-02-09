@@ -84,7 +84,7 @@ export default function ChatModal() {
     if (!mounted || !isChatOpen) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[80] flex items-end sm:items-center sm:justify-center">
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center sm:justify-center p-3 sm:p-4">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -93,7 +93,7 @@ export default function ChatModal() {
             {/* Modal content */}
             <div
                 data-chat-modal
-                className="relative w-full h-full sm:h-[85vh] sm:max-w-2xl sm:mx-4 sm:rounded-2xl overflow-hidden shadow-2xl bg-white dark:bg-slate-900"
+                className="relative w-full h-[92vh] sm:h-[85vh] max-w-2xl rounded-2xl overflow-hidden shadow-2xl bg-white dark:bg-slate-900"
             >
                 <ChatHearingV2
                     onContentUpdated={handleContentUpdated}

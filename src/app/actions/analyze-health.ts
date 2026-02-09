@@ -42,9 +42,39 @@ async function callGeminiAPI(prompt: string): Promise<string> {
             advices: {
                 type: "object",
                 properties: {
-                    belowAverage: { type: "array", items: { type: "string" } },
-                    badHabits: { type: "array", items: { type: "string" } },
-                    highImpact: { type: "array", items: { type: "string" } }
+                    belowAverage: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                category: { type: "string" },
+                                advice: { type: "string" }
+                            },
+                            required: ["category", "advice"]
+                        }
+                    },
+                    badHabits: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                category: { type: "string" },
+                                advice: { type: "string" }
+                            },
+                            required: ["category", "advice"]
+                        }
+                    },
+                    highImpact: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                category: { type: "string" },
+                                advice: { type: "string" }
+                            },
+                            required: ["category", "advice"]
+                        }
+                    }
                 },
                 required: ["belowAverage", "badHabits", "highImpact"]
             }
@@ -150,13 +180,18 @@ ${records && records.length > 0 ? records.map((r: any) => `
   ],
   "evaluation": "総合的な健康状態の評価文章",
   "advices": {
-    "belowAverage": ["平均以下のカテゴリに対する具体的なアドバイス"],
-    "badHabits": ["改善すべき悪習慣とその理由"],
-    "highImpact": ["最も効果的な改善策"]
+    "belowAverage": [{"category": "運動・体力", "advice": "週に3回以上の有酸素運動を取り入れましょう。"}],
+    "badHabits": [{"category": "睡眠・リカバリー", "advice": "就寝前のスマホ使用が睡眠の質を下げています。"}],
+    "highImpact": [{"category": "食習慣・栄養", "advice": "野菜の摂取量を増やすことで大きな改善が見込めます。"}]
   }
 }
 
 各カテゴリの"summary"は1-2文の短い要点、"detail"は3-5文の詳しい説明としてください。
+
+advicesの各項目は必ず{"category": "カテゴリ名", "advice": "具体的なアドバイス"}のオブジェクト形式で返してください。
+- badHabits: 健康寿命に悪い習慣TOP3（最大3件）
+- highImpact: 改善効果が高い施策TOP3（最大3件）
+- belowAverage: 平均以下のカテゴリに対する改善アドバイス（該当カテゴリすべて）
 
 カテゴリは以下の7つです：
 ${HEALTH_CATEGORIES.map(cat => `- ${cat.id}: ${cat.name} (ランク: ${cat.rank})`).join('\n')}
