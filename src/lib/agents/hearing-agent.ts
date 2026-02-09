@@ -83,6 +83,7 @@ EXTRACTED_DATA-->
 
 /**
  * 重複・矛盾の指摘指示を構築
+ * ユーザーの自然言語応答に対してAIが判断し、ISSUE_DECISIONを出力する
  */
 function buildIssueInstructions(issues: ProfileIssue[]): string {
   const issueDescriptions = issues.map((issue, i) => {
@@ -91,17 +92,44 @@ function buildIssueInstructions(issues: ProfileIssue[]): string {
       CONFLICT: '矛盾',
       OUTDATED: '古い情報',
     }[issue.type];
-    return `${i + 1}. 【${typeLabel}】${issue.description}\n   該当テキスト: ${issue.existingTexts.join(' / ')}\n   提案: ${issue.suggestedResolution}`;
+    const actionDesc = issue.suggestedAction
+      ? `\n   提案アクション: ${issue.suggestedAction.type === 'DELETE' ? '削除' : '更新'} - ${issue.suggestedAction.target_text || ''} → ${issue.suggestedAction.new_text || '（削除）'}`
+      : '';
+    return `${i + 1}. 【${typeLabel}】${issue.description}\n   該当テキスト: ${issue.existingTexts.join(' / ')}\n   提案: ${issue.suggestedResolution}${actionDesc}`;
   }).join('\n');
 
-  return `\n## ★ プロフィールの問題を先に指摘してください
+  return `\n## ★ プロフィールの整理提案への応答を処理してください
 
-質問を始める前に、以下の問題をユーザーに伝えて整理を提案してください:
+現在、以下の問題についてユーザーに修正を提案しています:
 
 ${issueDescriptions}
 
-「最新の状態に整理してもよいですか？」と聞いてください。
-ユーザーが同意したら、その旨を回答に含めてください。
+ユーザーの応答を解釈し、以下のように対応してください:
+- **承認**（「はい」「OK」「お願い」等）→ 提案通りに修正する旨を伝える
+- **拒否**（「いいえ」「スキップ」「いらない」等）→ スキップした旨を伝え、次に進む
+- **カスタム修正**（「●●に変更して」「△△は残して」等）→ ユーザーの指示を反映した修正内容を伝える
+- **質問**（「これはどういう意味？」等）→ 説明して再度確認する
+
+応答テキストの後に、以下の形式で判断結果を出力してください:
+
+<!--ISSUE_DECISION
+{
+  "decision": "approve" | "reject" | "custom" | "clarify",
+  "customAction": null | {
+    "type": "UPDATE" | "DELETE",
+    "section_id": "セクションID",
+    "target_text": "変更対象テキスト",
+    "new_text": "新しいテキスト（DELETEの場合はnull）",
+    "reason": "変更理由",
+    "confidence": 0.0-1.0
+  }
+}
+ISSUE_DECISION-->
+
+- **approve**: 提案通りの修正を実行
+- **reject**: この問題をスキップ
+- **custom**: ユーザーの指示に基づくカスタム修正（customActionにアクション内容を記載）
+- **clarify**: 追加説明が必要（修正は実行しない、issueは保持）
 `;
 }
 
@@ -116,6 +144,7 @@ export function parseExtractedData(fullResponse: string): {
 
   const responseText = fullResponse
     .replace(/<!--EXTRACTED_DATA[\s\S]*?EXTRACTED_DATA-->/g, '')
+    .replace(/<!--ISSUE_DECISION[\s\S]*?ISSUE_DECISION-->/g, '')
     .replace(/<!--MODE_SWITCH:\s*\w+\s*-->/g, '')
     .replace(/```json[\s\S]*?```/g, '')
     .replace(/```[\s\S]*?```/g, '')
@@ -131,5 +160,38 @@ export function parseExtractedData(fullResponse: string): {
   } catch (e) {
     console.error('[HearingAgent] Failed to parse EXTRACTED_DATA:', e);
     return { responseText, extractedData: null };
+  }
+}
+
+/**
+ * issue判断結果の型
+ */
+export interface IssueDecision {
+  decision: 'approve' | 'reject' | 'custom' | 'clarify';
+  customAction?: {
+    type: 'UPDATE' | 'DELETE';
+    section_id: string;
+    target_text: string;
+    new_text: string | null;
+    reason: string;
+    confidence: number;
+  } | null;
+}
+
+/**
+ * ストリーミングレスポンスからISSUE_DECISIONを抽出
+ */
+export function parseIssueDecision(fullResponse: string): IssueDecision | null {
+  const match = fullResponse.match(/<!--ISSUE_DECISION\n([\s\S]*?)\nISSUE_DECISION-->/);
+
+  if (!match) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(match[1]) as IssueDecision;
+  } catch (e) {
+    console.error('[HearingAgent] Failed to parse ISSUE_DECISION:', e);
+    return null;
   }
 }

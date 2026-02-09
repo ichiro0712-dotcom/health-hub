@@ -33,7 +33,7 @@ import {
 import { analyzeProfile } from '@/lib/agents/profile-analyzer';
 import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
-import { buildHearingSystemPrompt, parseExtractedData } from '@/lib/agents/hearing-agent';
+import { buildHearingSystemPrompt, parseExtractedData, parseIssueDecision } from '@/lib/agents/hearing-agent';
 import { generateProfileActions } from '@/lib/agents/profile-editor';
 import type { HearingAgentInput } from '@/lib/agents/types';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -256,62 +256,7 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // issue整理の承認/拒否を検出（フロントから1件のみ送られてくる）
-    const hasCurrentIssue = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0;
-    const isIssueConfirmation = hasCurrentIssue
-        && /^(はい|うん|OK|オッケー|お願い|実行|やって)/i.test(userMessage.trim());
-    const isIssueRejection = hasCurrentIssue
-        && /^(いいえ|いや|やめ|キャンセル|だめ|スキップ)/i.test(userMessage.trim());
-
-    // issue承認/拒否時は早期returnし、Geminiストリーミングに流さない
-    if (isIssueConfirmation || isIssueRejection) {
-        const issueExecutedActions: ProfileAction[] = [];
-
-        // メッセージをDBに保存
-        await prisma.healthChatMessage.create({
-            data: { sessionId: session.id, role: 'user', content: userMessage }
-        });
-
-        if (isIssueConfirmation) {
-            const currentIssue = analyzerIssues[0];
-            if (currentIssue?.suggestedAction && currentIssue.suggestedAction.type !== 'NONE') {
-                const result = await executeProfileAction(user.id, currentIssue.suggestedAction);
-                if (result.success) {
-                    issueExecutedActions.push(currentIssue.suggestedAction);
-                }
-            }
-            // 実行後にGoogle Docsを同期
-            if (issueExecutedActions.length > 0) {
-                const allSections = await prisma.healthProfileSection.findMany({
-                    where: { userId: user.id },
-                    orderBy: { orderIndex: 'asc' }
-                });
-                await syncHealthProfileToGoogleDocs(
-                    allSections.map(s => ({
-                        categoryId: s.categoryId,
-                        title: s.title,
-                        content: s.content,
-                        orderIndex: s.orderIndex
-                    }))
-                );
-            }
-        }
-
-        const responseMsg = isIssueConfirmation
-            ? (issueExecutedActions.length > 0 ? '修正を実行しました。' : 'この項目は変更不要でした。')
-            : 'スキップしました。';
-
-        await prisma.healthChatMessage.create({
-            data: { sessionId: session.id, role: 'assistant', content: responseMsg }
-        });
-
-        return createSimpleSSEResponse(responseMsg, {
-            sessionId: session.id,
-            mode: currentMode,
-            executedActions: issueExecutedActions,
-            issueProcessed: true,
-        });
-    }
+    // issue情報はAIストリーミングに渡して自然言語で処理する（早期returnしない）
 
     // モードに応じてコンテキストを取得し、システムプロンプトを生成
     let profileContent = '';
@@ -591,6 +536,43 @@ export async function POST(req: NextRequest) {
                     // data_analysis / helpモード: 従来のPROFILE_ACTIONはこれらのモードでは出力されない
                 }
 
+                // ISSUE_DECISION の処理（AIが自然言語で判断した結果）
+                const issueDecision = parseIssueDecision(fullResponse);
+                let issueProcessed = false;
+
+                if (issueDecision && analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0) {
+                    const currentIssue = analyzerIssues[0];
+                    issueProcessed = true;
+
+                    if (issueDecision.decision === 'approve') {
+                        // 提案通りに修正
+                        if (currentIssue?.suggestedAction && currentIssue.suggestedAction.type !== 'NONE') {
+                            const result = await executeProfileAction(userIdForClosure, currentIssue.suggestedAction);
+                            if (result.success) {
+                                executedActions.push(currentIssue.suggestedAction);
+                            }
+                        }
+                    } else if (issueDecision.decision === 'custom' && issueDecision.customAction) {
+                        // カスタム修正
+                        const customAction: ProfileAction = {
+                            type: issueDecision.customAction.type,
+                            section_id: issueDecision.customAction.section_id || currentIssue?.suggestedAction?.section_id || '',
+                            target_text: issueDecision.customAction.target_text,
+                            new_text: issueDecision.customAction.new_text || undefined,
+                            reason: issueDecision.customAction.reason,
+                            confidence: issueDecision.customAction.confidence,
+                        };
+                        const result = await executeProfileAction(userIdForClosure, customAction);
+                        if (result.success) {
+                            executedActions.push(customAction);
+                        }
+                    } else if (issueDecision.decision === 'clarify') {
+                        // 追加説明 → issueは保持（issueProcessedをfalseに戻す）
+                        issueProcessed = false;
+                    }
+                    // reject → 何も実行しない（issueProcessed=trueでフロントが次のissueに進む）
+                }
+
                 // メッセージを保存
                 const { responseText: cleanResponse } = parseExtractedData(fullResponse);
                 let finalCleanResponse = cleanResponse
@@ -637,8 +619,7 @@ export async function POST(req: NextRequest) {
                     pendingActions,
                     detectedIssues,
                     syncStatus,
-                    // issue処理は早期returnで対応済みのため、通常ストリームではfalse
-                    issueProcessed: false,
+                    issueProcessed,
                 })}\n\n`));
 
             } catch (error) {

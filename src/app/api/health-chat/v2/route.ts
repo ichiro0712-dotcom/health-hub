@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         }
 
         // リクエストボディ
-        const { message, sessionId, pendingActionsToExecute, analyzerIssues } = await req.json();
+        const { message, sessionId, pendingActionsToExecute } = await req.json();
 
         if (!message || typeof message !== 'string' || !message.trim()) {
             return NextResponse.json(ERROR_CODES.CHAT_004, { status: ERROR_CODES.CHAT_004.status });
@@ -187,70 +187,9 @@ export async function POST(req: NextRequest) {
         }
 
         // ============================================
-        // analyzerIssueの承認
+        // analyzerIssueの処理はstream/route.tsのAIストリーミングに統一
+        // （自然言語で承認/拒否/カスタム修正を処理）
         // ============================================
-        const hasAnalyzerIssues = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0;
-
-        if (hasAnalyzerIssues && isConfirmation) {
-            const executedActions: ProfileAction[] = [];
-            const currentIssue = analyzerIssues[0];
-
-            if (currentIssue?.suggestedAction && currentIssue.suggestedAction.type !== 'NONE') {
-                const result = await executeProfileAction(user.id, currentIssue.suggestedAction);
-                if (result.success) {
-                    executedActions.push(currentIssue.suggestedAction);
-                }
-            }
-
-            const syncResult = await syncToGoogleDocsWithNotification(user.id);
-
-            const confirmResponse = executedActions.length > 0
-                ? '修正を実行しました。'
-                : 'この項目は変更不要でした。';
-
-            await prisma.healthChatMessage.createMany({
-                data: [
-                    { sessionId: session.id, role: 'user', content: userMessage },
-                    { sessionId: session.id, role: 'assistant', content: confirmResponse }
-                ]
-            });
-
-            return NextResponse.json({
-                success: true,
-                response: confirmResponse,
-                sessionId: session.id,
-                mode: session.mode,
-                sessionStatus: 'active',
-                executedActions,
-                pendingActions: [],
-                issueProcessed: true,
-                syncStatus: syncResult.success ? 'synced' : 'failed',
-                syncError: syncResult.error
-            });
-        }
-
-        // analyzerIssueの拒否
-        if (hasAnalyzerIssues && isRejection) {
-            const rejectResponse = 'スキップしました。';
-
-            await prisma.healthChatMessage.createMany({
-                data: [
-                    { sessionId: session.id, role: 'user', content: userMessage },
-                    { sessionId: session.id, role: 'assistant', content: rejectResponse }
-                ]
-            });
-
-            return NextResponse.json({
-                success: true,
-                response: rejectResponse,
-                sessionId: session.id,
-                mode: session.mode,
-                sessionStatus: 'active',
-                executedActions: [],
-                pendingActions: [],
-                issueProcessed: true,
-            });
-        }
 
         // ============================================
         // 終了リクエスト

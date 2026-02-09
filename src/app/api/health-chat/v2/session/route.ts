@@ -101,7 +101,7 @@ function formatFirstIssueForWelcome(issues: import('@/lib/agents/types').Profile
             }
             text += `変更後: 「${action.new_text}」\n\n`;
         }
-        text += `こう修正しますか？「はい」で修正、「スキップ」で次へ進みます。`;
+        text += `こう修正してもよいですか？別の内容に変えたい場合はそのまま教えてください。`;
     } else {
         text += `→ ${issue.suggestedResolution}`;
     }

@@ -78,7 +78,7 @@ function buildSingleIssueProposal(issue: ProfileIssue, current: number, total: n
       }
       proposalText += `変更後: 「${action.new_text}」\n\n`;
     }
-    proposalText += `こう修正しますか？「はい」で修正、「スキップ」で次へ進みます。`;
+    proposalText += `こう修正してもよいですか？別の内容に変えたい場合はそのまま教えてください。`;
   } else {
     proposalText += `→ ${issue.suggestedResolution}`;
   }
@@ -749,25 +749,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
         </div>
       )}
 
-      {/* issue整理の確認ボタン */}
-      {analyzerIssues.length > 0 && pendingActions.length === 0 && !isLoading && (
-        <div className="px-4 py-2 bg-orange-50 dark:bg-orange-900/30 border-t border-orange-200 dark:border-orange-700 flex-shrink-0">
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={() => sendMessage('はい')}
-              className="px-4 py-1.5 text-xs bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors font-medium"
-            >
-              修正する
-            </button>
-            <button
-              onClick={() => sendMessage('スキップ')}
-              className="px-4 py-1.5 text-xs bg-slate-400 text-white rounded-full hover:bg-slate-500 transition-colors font-medium"
-            >
-              スキップ
-            </button>
-          </div>
-        </div>
-      )}
+      {/* issue整理はAIストリーミングで自然言語処理するためボタン不要 */}
 
       {/* 保留中のアクションがある場合のクイックアクションボタン */}
       {pendingActions.length > 0 && !isLoading && (
