@@ -134,6 +134,30 @@ ISSUE_DECISION-->
 }
 
 /**
+ * issue処理専用のシステムプロンプトを構築
+ * issueがある場合は通常質問を聞かず、issue処理のみに集中する
+ */
+export function buildIssueOnlySystemPrompt(
+  issues: ProfileIssue[],
+  conversationHistory: { role: string; content: string }[],
+): string {
+  const issueInstructions = buildIssueInstructions(issues);
+
+  return `あなたはH-Hubアシスタントです。ユーザーの健康プロフィールの整理を手伝っています。
+
+## あなたの役割
+プロフィールの重複・矛盾・古い情報の整理提案に対するユーザーの応答を処理してください。
+**質問は一切しないでください。** issue処理のみに集中してください。
+${issueInstructions}
+
+## ルール
+1. ユーザーの応答を解釈してISSUE_DECISIONを出力してください
+2. 新しい質問は**絶対にしないでください**
+3. 簡潔に応答してください（「了解しました、修正します」「スキップしますね」等）
+4. ユーザーが「終わり」「保存して」と言ったらセッション終了を提案してください`;
+}
+
+/**
  * ストリーミングレスポンスからEXTRACTED_DATAを抽出
  */
 export function parseExtractedData(fullResponse: string): {

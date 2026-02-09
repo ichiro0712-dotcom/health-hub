@@ -33,7 +33,7 @@ import {
 import { analyzeProfile } from '@/lib/agents/profile-analyzer';
 import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
-import { buildHearingSystemPrompt, parseExtractedData, parseIssueDecision } from '@/lib/agents/hearing-agent';
+import { buildHearingSystemPrompt, buildIssueOnlySystemPrompt, parseExtractedData, parseIssueDecision } from '@/lib/agents/hearing-agent';
 import { generateProfileActions } from '@/lib/agents/profile-editor';
 import type { HearingAgentInput } from '@/lib/agents/types';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -266,38 +266,44 @@ export async function POST(req: NextRequest) {
     const isProfileBuilding = currentMode === 'profile_building';
 
     if (isProfileBuilding) {
-        // プロフィール構築: ヒアリングエージェントのプロンプトを構築
-        const profileResult = await readHealthProfileFromGoogleDocs();
-        profileContent = profileResult.success ? profileResult.content || '' : '';
+        // プロフィール構築モード
+        const hasIssues = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0;
 
-        // session.messagesから直接ユーザーメッセージ数を算出（不要なDBクエリ回避）
-        const userMessageCount = session.messages.filter(m => m.role === 'user').length;
-        hearingInput = await getHearingContext(
-            user.id,
-            { currentQuestionId: session.currentQuestionId, currentPriority: session.currentPriority },
-            profileContent,
-            userMessageCount,
-        );
-
-        if (hearingInput) {
-            // 会話履歴を設定
+        if (hasIssues) {
+            // issue処理中: 通常質問は聞かず、issue処理のみに集中
             const rawHistory = session.messages.map(m => ({
                 role: m.role,
                 content: m.content
             }));
-            hearingInput.conversationHistory = summarizeHistory(rawHistory);
-            // issue承認/拒否は早期returnで処理済みのため、ここに来るのは通常メッセージのみ
-            if (analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0) {
-                hearingInput.issuesForUser = analyzerIssues;
-            }
-            systemPrompt = buildHearingSystemPrompt(hearingInput);
+            systemPrompt = buildIssueOnlySystemPrompt(analyzerIssues, summarizeHistory(rawHistory));
         } else {
-            // 質問が尽きた場合はフォールバック
-            systemPrompt = buildSystemPrompt({
-                mode: currentMode,
+            // 通常のヒアリング: 質問を進める
+            const profileResult = await readHealthProfileFromGoogleDocs();
+            profileContent = profileResult.success ? profileResult.content || '' : '';
+
+            const userMessageCount = session.messages.filter(m => m.role === 'user').length;
+            hearingInput = await getHearingContext(
+                user.id,
+                { currentQuestionId: session.currentQuestionId, currentPriority: session.currentPriority },
                 profileContent,
-                recordsContent: '',
-            });
+                userMessageCount,
+            );
+
+            if (hearingInput) {
+                const rawHistory = session.messages.map(m => ({
+                    role: m.role,
+                    content: m.content
+                }));
+                hearingInput.conversationHistory = summarizeHistory(rawHistory);
+                systemPrompt = buildHearingSystemPrompt(hearingInput);
+            } else {
+                // 質問が尽きた場合はフォールバック
+                systemPrompt = buildSystemPrompt({
+                    mode: currentMode,
+                    profileContent,
+                    recordsContent: '',
+                });
+            }
         }
     } else if (currentMode === 'data_analysis') {
         const [profileResult, recordsResult] = await Promise.all([
