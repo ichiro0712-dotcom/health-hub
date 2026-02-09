@@ -5,7 +5,7 @@
 v1（CHAT_HEARING_SPEC.md）は固定質問リスト＋進捗管理方式。v2では以下に刷新:
 
 - 固定質問リスト → AIが自律的に対話
-- HealthQuestionProgress テーブル不要
+- HealthQuestionProgress テーブルは質問進捗管理に使用（回答済みquestionIdを記録）
 - Google Docsを Single Source of Truth として活用
 - ストリーミング応答（SSE）対応
 - 健康データの分析・アドバイス機能を追加
@@ -36,7 +36,7 @@ v2の単一LLM呼び出しを**3つの役割特化AI**に分離:
 │  │ (HEALTH_PROFILE) │  │   (RECORDS)      │                   │
 │  └─────────────────┘  └─────────────────┘                   │
 │            ↓                    ↓                            │
-│         READ (チャット開始時 / 手動同期時)                   │
+│         READ (チャット開始時 / 手動同期時 / セッション再開時)  │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -45,13 +45,16 @@ v2の単一LLM呼び出しを**3つの役割特化AI**に分離:
 │  - プロフィール全文を分析                                    │
 │  - 重複・矛盾・古い情報を検出                               │
 │  - 未入力の質問リストをpriority順で生成                      │
-│  - Temperature: 0.1、JSON出力のみ、1回だけ実行               │
+│  - Temperature: 0.1、JSON出力のみ                           │
+│  - 実行タイミング: セッション新規作成時 / 手動同期時 /        │
+│    セッション再開時（GET /api/health-chat/v2/session）        │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │          Stage 2: Hearing AI（ユーザーとの対話）              │
 │  - 現在の質問1つ + 該当セクションの既存情報のみ使用           │
+│  - 次の質問候補をプロンプトに含め、自然な遷移を実現           │
 │  - プロンプト ~800-1000トークン（従来の3000-5000から削減）    │
 │  - 会話テキスト + <!--EXTRACTED_DATA-->で抽出情報を返す       │
 │  - Temperature: 0.4、ストリーミング対応                      │
@@ -92,11 +95,35 @@ v2の単一LLM呼び出しを**3つの役割特化AI**に分離:
 - プロフィールや診断記録データを読み取り、傾向や気になる点を指摘
 - 数値の経年変化や基準値との比較
 - 生活改善のアドバイスを提供
+- Temperature: 0.7（profile_buildingの0.4より高め、より自然な会話のため）
 
 ### 3. Health Hubの使い方サポート（help）
 - システムプロンプトに埋め込まれたFAQ情報をもとに回答
 - 連携設定などは該当する設定ページへ誘導（チャット内で完結させない）
 - `/help` ページも別途用意
+- Temperature: 0.4
+
+---
+
+## チャットUI: モーダル/タブ動作
+
+### 表示方式
+- チャットUIはグローバルモーダル（`ChatModal.tsx`）としてレイアウトにマウント
+- `createPortal`で`document.body`に直接レンダリング
+- FloatingMenu（右下FAB）またはメニュー内ボタンから開閉
+
+### タブ的動作（hasBeenOpened パターン）
+- 初回オープン時に`hasBeenOpened`フラグがtrueになり、`ChatHearingV2`コンポーネントをマウント
+- 以降はモーダルを閉じてもアンマウントせず、**CSS visibility/opacity で非表示化**するだけ
+- これによりチャット状態（会話履歴、ストリーミング、セッション）がモーダル閉中も維持される
+- モーダルを再度開くと、前回の状態がそのまま表示される
+
+### バックグラウンド動作フィードバック
+- `ChatModalContext`に`isAIResponding`状態を保持
+- `ChatHearingV2`の`isLoading`変化時に`setIsAIResponding`で同期
+- FloatingMenuのチャットボタンにパルスインジケーター（応答中ドット）を表示
+- FABボタンにping/pulseアニメーション（メニュー閉時のみ）
+- ボタン下テキストを「応答中...」に変更
 
 ---
 
@@ -150,9 +177,20 @@ interface DataStatus {
 ### セッション再開
 
 既存セッション（メッセージあり）を再開する場合:
+- Profile Analyzerを再実行（最新のプロフィール状態を反映）
+- 前回の会話履歴を復元
 ```
 お帰りなさい！前回の続きから再開しますね。
 ```
+
+### Profile Analyzer実行タイミング
+
+| タイミング | トリガー | 目的 |
+|------------|----------|------|
+| セッション新規作成 | `GET /api/health-chat/v2/session`（セッションなし） | 初回分析・質問リスト生成 |
+| セッション再開 | `GET /api/health-chat/v2/session`（既存セッションあり） | 最新状態での再分析 |
+| 手動同期 | `POST /api/health-chat/v2/session`（同期ボタン押下） | ユーザー操作による再分析 |
+| プロフィールチェック要求 | ユーザーメッセージが正規表現にマッチ | オンデマンド分析 |
 
 ### 番号選択への対応
 
@@ -168,7 +206,7 @@ interface DataStatus {
 
 profile_buildingモードでは、従来の単一プロンプトに代えて3つの役割特化AIがそれぞれコンパクトなプロンプトで動作する。
 
-#### Stage 1: Profile Analyzer（セッション開始時に1回実行）
+#### Stage 1: Profile Analyzer（セッション開始時 / 同期時 / 再開時に実行）
 - プロフィール全文 + 回答済み質問IDリストを入力
 - 重複・矛盾・古い情報をJSON形式で出力
 - 未入力の質問リストをpriority順で生成
@@ -176,6 +214,7 @@ profile_buildingモードでは、従来の単一プロンプトに代えて3つ
 
 #### Stage 2: Hearing AI（毎回の対話で使用・ストリーミング）
 - **現在の質問1つ** + **該当セクションの既存情報のみ**をプロンプトに含める
+- **次の質問候補**をプロンプトに含め、回答後の自然な遷移を促す
 - プロンプトサイズ: ~800-1000トークン（従来の3000-5000トークンから大幅削減）
 - 会話テキスト + `<!--EXTRACTED_DATA ... EXTRACTED_DATA-->` マーカーで抽出情報を返す
 - Gemini 2.0 Flash / Temperature: 0.4
@@ -192,6 +231,7 @@ data_analysis / helpモードは従来どおり単一システムプロンプト
 - プロフィール全文 + 診断記録をコンテキストに含める
 - モード別のルール（分析 or FAQ）をプロンプトに記載
 - PROFILE_ACTIONは出力しない
+- Temperature: data_analysis=0.7、help=0.4
 
 ### 共通要素
 
@@ -217,7 +257,7 @@ data_analysis / helpモードは従来どおり単一システムプロンプト
 
 ### GET /api/health-chat/v2/session
 
-セッション取得/新規作成。新規セッション時にProfile Analyzerを実行し、最初の質問を含むウェルカムメッセージを生成。
+セッション取得/新規作成。新規セッション時・再開時にProfile Analyzerを実行し、最初の質問を含むウェルカムメッセージを生成。
 
 **レスポンス:**
 ```json
@@ -247,7 +287,7 @@ data_analysis / helpモードは従来どおり単一システムプロンプト
 
 ### POST /api/health-chat/v2/session
 
-Google Docsデータを手動同期
+Google Docsデータを手動同期 + Profile Analyzerを再実行
 
 ### DELETE /api/health-chat/v2/session
 
@@ -258,6 +298,7 @@ Google Docsデータを手動同期
 **ストリーミング応答（メインAPI）**
 
 Server-Sent Events (SSE) を使用してリアルタイムで応答を返す。
+すべてのユーザーメッセージ（通常会話、issue承認/拒否含む）を処理する主要エンドポイント。
 
 **リクエスト:**
 ```json
@@ -268,21 +309,27 @@ Server-Sent Events (SSE) を使用してリアルタイムで応答を返す。
 ```
 
 **処理フロー（profile_buildingモード）:**
-1. 認証チェック・レート制限
-2. Google Docsからプロフィール読み込み（該当セクションのみ抽出）
-3. 会話履歴取得（最大20件、超過分はサマリー化）
-4. **Hearing AI**のシステムプロンプトを構築（現在の質問1つ + セクション情報）
-5. Gemini 2.0 Flash にストリーミングリクエスト
-6. SSEでリアルタイム応答（`EXTRACTED_DATA`ブロックはフィルタリング）
-7. 応答完了後、`EXTRACTED_DATA`をパース
-8. **Profile Editor AI**に抽出データを渡してPROFILE_ACTIONを生成
-9. confidence ≥ 0.8 のアクションを自動実行（DELETEは 0.95以上）
-10. 低confidence のアクションはpendingActionsとして返却
-11. 質問進捗を更新
-12. メッセージ保存・Google Docs同期
+1. 認証チェック・レート制限（共通rate-limitモジュール）
+2. プロフィールチェック要求の検出（正規表現マッチ → Profile Analyzer再実行）
+3. issue承認/拒否の検出 → 早期return（固定メッセージをSSEで返す、Geminiに流さない）
+4. Google Docsからプロフィール読み込み（該当セクションのみ抽出）
+5. 会話履歴取得（最大20件、超過分はサマリー化）
+6. **Hearing AI**のシステムプロンプトを構築（現在の質問1つ + セクション情報 + 次の質問候補）
+7. Gemini 2.0 Flash にストリーミングリクエスト
+8. SSEでリアルタイム応答（`EXTRACTED_DATA`ブロックはフィルタリング）
+9. 応答完了後、`EXTRACTED_DATA`をパース
+10. **Profile Editor AI**に抽出データを渡してPROFILE_ACTIONを生成
+11. confidence ≥ 0.8 のアクションを自動実行（DELETEは 0.95以上）
+12. 低confidence のアクションはpendingActionsとして返却
+13. 質問進捗を更新（HealthQuestionProgress）
+14. メッセージ保存・Google Docs同期
 
 **処理フロー（data_analysis / helpモード）:**
-1-4は従来どおり単一システムプロンプトで処理
+1-5は従来どおり単一システムプロンプトで処理
+
+**issue承認/拒否の早期return:**
+- ユーザーメッセージが承認パターン（`/^(はい|うん|OK|オッケー|お願い|実行|やって)/i`）にマッチ → issue修正実行 + 次のissue or 完了メッセージをSSEで返す
+- 拒否パターン（`/^(いいえ|いや|スキップ|しない|SkIP|パス|不要)/i`）にマッチ → スキップして次のissue or 完了メッセージをSSEで返す
 
 **SSEデータ形式:**
 ```
@@ -294,9 +341,35 @@ data: {"done": true, "executedActions": [...], "pendingActions": [...]}
 
 ### POST /api/health-chat/v2
 
-**非ストリーミング応答（フォールバック）**
+**pendingActions/issue操作専用API（非ストリーミング）**
 
-ストリーミングと同じ処理を同期的に実行し、JSON一括レスポンスを返す。
+AI会話処理は含まない。以下の操作のみを処理:
+
+- **pendingActions承認/拒否**: 低confidenceのプロフィール更新アクションの承認・拒否
+- **analyzerIssue承認/拒否**: Profile Analyzerが検出した重複・矛盾の修正承認・拒否
+- **セッション終了**: チャットセッションの終了リクエスト
+- **その他**: 上記以外のメッセージが来た場合は `{ redirectToStream: true }` を返し、クライアントにstream APIの使用を案内
+
+---
+
+## フロントエンド: SSEチャンクバッファリング
+
+SSEストリームのチャンクがメッセージ境界で分割される問題に対応:
+
+```typescript
+let sseBuffer = '';
+// チャンク受信時
+sseBuffer += chunk;
+const lines = sseBuffer.split('\n');
+sseBuffer = lines.pop() || ''; // 最後の不完全行をバッファに保持
+// 完全な行のみ処理
+for (const line of lines) {
+  if (line.startsWith('data: ')) {
+    const json = JSON.parse(line.slice(6));
+    // ... 処理
+  }
+}
+```
 
 ---
 
@@ -358,6 +431,8 @@ SSEストリーミング中、マーカーブロック（`EXTRACTED_DATA` or `PR
 ## セキュリティ対策
 
 ### レート制限
+- **共通モジュール**: `src/lib/rate-limit.ts` で統一管理
+- route.ts と stream/route.ts が同一の `rateLimitMap` を共有（交互叩きによるバイパスを防止）
 - インメモリ実装（本番はRedis推奨）
 - 1分間に20リクエストまで
 
@@ -391,26 +466,31 @@ src/
 │   ├── api/
 │   │   └── health-chat/
 │   │       └── v2/
-│   │           ├── route.ts           # 非ストリーミングAPI
-│   │           ├── stream/route.ts    # ストリーミングAPI（メイン）
+│   │           ├── route.ts           # pendingActions/issue操作専用API（非ストリーミング）
+│   │           ├── stream/route.ts    # ストリーミングAPI（メイン・全メッセージ処理）
 │   │           └── session/route.ts   # セッション管理API + Profile Analyzer統合
 │   ├── help/
 │   │   └── page.tsx                   # FAQ/ヘルプページ
 │   └── health-profile/
 │       └── page.tsx                   # 健康プロフページ
 ├── components/
-│   └── health-profile/
-│       └── ChatHearingV2.tsx          # チャットUIコンポーネント
+│   ├── health-profile/
+│   │   └── ChatHearingV2.tsx          # チャットUIコンポーネント（react-markdown使用）
+│   ├── ChatModal.tsx                  # グローバルチャットモーダル（createPortal）
+│   └── FloatingMenu.tsx              # 右下FAB + スライドメニュー（AI応答インジケーター付き）
+├── contexts/
+│   └── ChatModalContext.tsx           # チャットモーダル状態管理（isChatOpen, isAIResponding）
 ├── constants/
 │   ├── health-profile.ts             # 11カテゴリ定義
 │   └── health-questions.ts           # 169問の質問マスターデータ
 └── lib/
     ├── agents/                        # 3エージェントパイプライン
-    │   ├── types.ts                   # 共有型定義
+    │   ├── types.ts                   # 共有型定義（HearingAgentInput含む）
     │   ├── profile-analyzer.ts        # Stage 1: プロフィール分析AI
-    │   ├── hearing-agent.ts           # Stage 2: ヒアリングAI
+    │   ├── hearing-agent.ts           # Stage 2: ヒアリングAI（次の質問候補対応）
     │   └── profile-editor.ts          # Stage 3: プロフィール編集AI
-    ├── chat-prompts.ts                # モード別プロンプト + 共通ユーティリティ
+    ├── chat-prompts.ts                # モード別プロンプト + フォールバック用buildProfileBuildingPrompt
+    ├── rate-limit.ts                  # 共通レート制限モジュール（route.ts/stream共有）
     ├── google-docs.ts                 # Google Docs読み書き
     └── prisma.ts                      # Prismaクライアント
 ```
@@ -441,6 +521,14 @@ content: Text
 createdAt: DateTime
 ```
 
+### HealthQuestionProgress
+```
+id: UUID
+userId: UUID (FK → User)
+questionId: String         # 質問マスターのID（例: "1-1"）
+answeredAt: DateTime
+```
+
 ---
 
 ## 移行計画
@@ -467,15 +555,24 @@ createdAt: DateTime
 4. 番号選択メニュー廃止 → プロフィール未完成時は即質問開始
 5. フロントエンドにアナライザー検出結果のバナー表示UI追加
 
-### Phase 4: 改善（次回以降）
-1. コンテキストキャッシング最適化
-2. ユーザーフィードバックループ
-3. アナライザー結果を活用した自動整理提案
+### Phase 4: リファクタリング ✅
+1. 共通rate-limitモジュール化（route.ts/stream/route.ts統合）
+2. route.tsをissue/pendingActions専用に縮小（696→308行）
+3. stream/route.tsのSSEヘルパー共通化・issue早期return
+4. react-markdownによるマークダウンレンダリング強化
+5. SSEチャンクバッファリング修正
+6. タイピングインジケーター・バックグラウンド動作フィードバック
+7. Hearing AIに次の質問候補を含める自然な遷移
+8. プロフィールチェック正規表現拡充
+9. issue承認/拒否のボタン化
+10. モーダル/タブ動作によるチャット状態の永続化
 
 ### Phase 5: 高度化（将来）
 1. Gemini 2.5への移行
-2. 外部データの自動統合
-3. 予測的な健康提案
+2. コンテキストキャッシング最適化
+3. 外部データの自動統合
+4. 予測的な健康提案
+5. ユーザーフィードバックループ
 
 ---
 
@@ -495,3 +592,6 @@ createdAt: DateTime
 | 使い方サポート | なし | FAQ情報から回答 | 同左 |
 | リアルタイム性 | 一括応答 | SSEストリーミング | 同左 |
 | ウェルカム | 固定 | 動的生成 | 動的生成+最初の質問を即表示 |
+| レート制限 | - | 各API独立 | 共通モジュールで統合 |
+| マークダウン | - | 手動パース | react-markdown |
+| チャット状態 | - | モーダル閉で消失 | タブ動作で永続化 |

@@ -202,7 +202,10 @@ function buildModeTransitionInstructions(currentMode: ChatMode): string {
 （該当するモード名を1つだけ記載）`;
 }
 
-// --- プロフィール構築モード ---
+// --- プロフィール構築モード（フォールバック用） ---
+// 通常は Hearing Agent がプロンプトを構築するが、
+// 全ての質問に回答済みで getHearingContext が null を返す場合に
+// このモノリシックプロンプトがフォールバックとして使用される。
 
 function buildProfileBuildingPrompt(
     profileContent: string,

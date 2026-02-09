@@ -36,7 +36,7 @@ export default function FloatingMenu() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const { openChat } = useChatModal();
+  const { openChat, isAIResponding } = useChatModal();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // メニューが開いているときは背景スクロールを防止 & スクロール位置リセット
@@ -156,10 +156,17 @@ export default function FloatingMenu() {
             }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-all mb-2"
           >
-            <MessageCircle className="w-5 h-5" />
-            <div className="text-left">
+            <div className="relative">
+              <MessageCircle className="w-5 h-5" />
+              {isAIResponding && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse" />
+              )}
+            </div>
+            <div className="text-left flex-1">
               <span className="font-bold block">H-Hubアシスタント</span>
-              <span className="text-xs opacity-70">健康相談・プロフィール作成</span>
+              <span className="text-xs opacity-70">
+                {isAIResponding ? '応答中...' : '健康相談・プロフィール作成'}
+              </span>
             </div>
           </button>
 
@@ -309,6 +316,13 @@ export default function FloatingMenu() {
             : '0 4px 20px rgba(20, 184, 166, 0.4)',
         }}
       >
+        {/* AI応答中パルスインジケーター（メニュー閉じている時のみ） */}
+        {isAIResponding && !isOpen && (
+          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-teal-300 rounded-full animate-ping" />
+        )}
+        {isAIResponding && !isOpen && (
+          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-teal-400 rounded-full" />
+        )}
         <Menu
           className={`w-6 h-6 transition-all duration-300 ${
             isOpen ? 'text-white dark:text-slate-800' : 'text-white'

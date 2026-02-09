@@ -36,32 +36,36 @@ import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
 import { buildHearingSystemPrompt, parseExtractedData } from '@/lib/agents/hearing-agent';
 import { generateProfileActions } from '@/lib/agents/profile-editor';
 import type { HearingAgentInput } from '@/lib/agents/types';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
 // ============================================
-// レート制限（インメモリ）
+// SSE共通ヘッダー・ヘルパー
 // ============================================
 
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_MAX = 20;
-const RATE_LIMIT_WINDOW = 60 * 1000;
+const SSE_HEADERS = {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+} as const;
 
-function checkRateLimit(userId: string): boolean {
-    const now = Date.now();
-    const record = rateLimitMap.get(userId);
-
-    if (!record || now > record.resetAt) {
-        rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
-        return true;
-    }
-
-    if (record.count >= RATE_LIMIT_MAX) {
-        return false;
-    }
-
-    record.count++;
-    return true;
+/**
+ * 固定メッセージのSSEレスポンスを生成するヘルパー
+ */
+function createSimpleSSEResponse(
+    text: string,
+    extras: Record<string, unknown> = {},
+): Response {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+        start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, ...extras })}\n\n`));
+            controller.close();
+        }
+    });
+    return new Response(stream, { headers: SSE_HEADERS });
 }
 
 // ============================================
@@ -72,6 +76,7 @@ async function getHearingContext(
     userId: string,
     session: { currentQuestionId: string | null; currentPriority: number },
     profileContent: string,
+    userMessageCount: number,
 ): Promise<HearingAgentInput | null> {
     const answeredIds = await getAnsweredQuestionIds(userId);
     const currentPriority = (session.currentPriority || 3) as 3 | 2 | 1;
@@ -105,13 +110,9 @@ async function getHearingContext(
         }
     }
 
-    // 会話の長さから初回かどうか判定
-    const messageCount = await prisma.healthChatMessage.count({
-        where: {
-            session: { userId },
-            role: 'user',
-        }
-    });
+    // 次の質問を先読み（自然な会話遷移のため）
+    const answeredIdsWithCurrent = [...answeredIds, currentQuestion.id];
+    const upcomingQuestion = getNextQuestion(answeredIdsWithCurrent, currentPriority);
 
     return {
         currentQuestion: {
@@ -123,7 +124,8 @@ async function getHearingContext(
         },
         existingSectionContent: sectionContent,
         conversationHistory: [], // 呼び出し元で設定
-        isFirstQuestion: messageCount === 0,
+        isFirstQuestion: userMessageCount === 0,
+        nextQuestion: upcomingQuestion ? upcomingQuestion.question : undefined,
     };
 }
 
@@ -212,11 +214,10 @@ export async function POST(req: NextRequest) {
     }
 
     // プロフィールチェック要求を検出
-    const isProfileCheckRequest = /プロフィール.{0,4}(チェック|確認|整理|見直|診断)|重複.{0,4}(チェック|確認|整理)|矛盾.{0,4}(チェック|確認|整理)/.test(userMessage.trim());
+    const isProfileCheckRequest = /プロフィール.{0,4}(チェック|確認|整理|見直し?|診断|点検)|重複.{0,4}(チェック|確認|整理|ない|ある)|矛盾.{0,4}(チェック|確認|整理|ない|ある)|ダブり|ダブって|問題ないか.{0,2}見て|大丈夫[?？]?$/.test(userMessage.trim());
 
     // プロフィールチェック要求時はAnalyzerを実行して結果を返す
     if (isProfileCheckRequest) {
-        const encoder = new TextEncoder();
         const profileResult = await readHealthProfileFromGoogleDocs();
         const profileContent = profileResult.success ? profileResult.content || '' : '';
 
@@ -230,16 +231,7 @@ export async function POST(req: NextRequest) {
             await prisma.healthChatMessage.create({
                 data: { sessionId: session.id, role: 'assistant', content: noDataMsg }
             });
-            const stream = new ReadableStream({
-                start(controller) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: noDataMsg })}\n\n`));
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, sessionId: session.id, mode: currentMode })}\n\n`));
-                    controller.close();
-                }
-            });
-            return new Response(stream, {
-                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }
-            });
+            return createSimpleSSEResponse(noDataMsg, { sessionId: session.id, mode: currentMode });
         }
 
         const answeredIds = await getAnsweredQuestionIds(user.id);
@@ -250,61 +242,36 @@ export async function POST(req: NextRequest) {
             await prisma.healthChatMessage.create({
                 data: { sessionId: session.id, role: 'assistant', content: responseMsg }
             });
-            const stream = new ReadableStream({
-                start(controller) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: responseMsg })}\n\n`));
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-                        done: true,
-                        sessionId: session.id,
-                        mode: currentMode,
-                        analyzerIssues: analyzerResult.issues,
-                    })}\n\n`));
-                    controller.close();
-                }
-            });
-            return new Response(stream, {
-                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }
+            return createSimpleSSEResponse(responseMsg, {
+                sessionId: session.id,
+                mode: currentMode,
+                analyzerIssues: analyzerResult.issues,
             });
         } else {
             const okMsg = 'プロフィールをチェックしました。重複や矛盾は見つかりませんでした！';
             await prisma.healthChatMessage.create({
                 data: { sessionId: session.id, role: 'assistant', content: okMsg }
             });
-            const stream = new ReadableStream({
-                start(controller) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: okMsg })}\n\n`));
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, sessionId: session.id, mode: currentMode })}\n\n`));
-                    controller.close();
-                }
-            });
-            return new Response(stream, {
-                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }
-            });
+            return createSimpleSSEResponse(okMsg, { sessionId: session.id, mode: currentMode });
         }
     }
 
     // issue整理の承認/拒否を検出（フロントから1件のみ送られてくる）
     const hasCurrentIssue = analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0;
     const isIssueConfirmation = hasCurrentIssue
-        && /^(はい|うん|OK|オッケー|お願い|実行|やって)$/i.test(userMessage.trim());
+        && /^(はい|うん|OK|オッケー|お願い|実行|やって)/i.test(userMessage.trim());
     const isIssueRejection = hasCurrentIssue
-        && /^(いいえ|いや|やめ|キャンセル|だめ|スキップ)$/i.test(userMessage.trim());
+        && /^(いいえ|いや|やめ|キャンセル|だめ|スキップ)/i.test(userMessage.trim());
 
-    // モードに応じてコンテキストを取得し、システムプロンプトを生成
-    let profileContent = '';
-    let recordsContent = '';
-    let systemPrompt = '';
-    let hearingInput: HearingAgentInput | null = null;
-    const isProfileBuilding = currentMode === 'profile_building';
-    // issue整理で実行されたアクション（ストリーム完了時にフロントに返す）
-    let issueExecutedActions: ProfileAction[] = [];
+    // issue承認/拒否時は早期returnし、Geminiストリーミングに流さない
+    if (isIssueConfirmation || isIssueRejection) {
+        const issueExecutedActions: ProfileAction[] = [];
 
-    if (isProfileBuilding) {
-        // プロフィール構築: ヒアリングエージェントのプロンプトを構築
-        const profileResult = await readHealthProfileFromGoogleDocs();
-        profileContent = profileResult.success ? profileResult.content || '' : '';
+        // メッセージをDBに保存
+        await prisma.healthChatMessage.create({
+            data: { sessionId: session.id, role: 'user', content: userMessage }
+        });
 
-        // issue整理の承認時: 1件目のsuggestedActionのみ実行
         if (isIssueConfirmation) {
             const currentIssue = analyzerIssues[0];
             if (currentIssue?.suggestedAction && currentIssue.suggestedAction.type !== 'NONE') {
@@ -313,7 +280,7 @@ export async function POST(req: NextRequest) {
                     issueExecutedActions.push(currentIssue.suggestedAction);
                 }
             }
-            // 実行後にGoogle Docsを同期 & プロフィールを再読み込み
+            // 実行後にGoogle Docsを同期
             if (issueExecutedActions.length > 0) {
                 const allSections = await prisma.healthProfileSection.findMany({
                     where: { userId: user.id },
@@ -327,15 +294,44 @@ export async function POST(req: NextRequest) {
                         orderIndex: s.orderIndex
                     }))
                 );
-                const refreshed = await readHealthProfileFromGoogleDocs();
-                profileContent = refreshed.success ? refreshed.content || '' : profileContent;
             }
         }
 
+        const responseMsg = isIssueConfirmation
+            ? (issueExecutedActions.length > 0 ? '修正を実行しました。' : 'この項目は変更不要でした。')
+            : 'スキップしました。';
+
+        await prisma.healthChatMessage.create({
+            data: { sessionId: session.id, role: 'assistant', content: responseMsg }
+        });
+
+        return createSimpleSSEResponse(responseMsg, {
+            sessionId: session.id,
+            mode: currentMode,
+            executedActions: issueExecutedActions,
+            issueProcessed: true,
+        });
+    }
+
+    // モードに応じてコンテキストを取得し、システムプロンプトを生成
+    let profileContent = '';
+    let recordsContent = '';
+    let systemPrompt = '';
+    let hearingInput: HearingAgentInput | null = null;
+    const isProfileBuilding = currentMode === 'profile_building';
+
+    if (isProfileBuilding) {
+        // プロフィール構築: ヒアリングエージェントのプロンプトを構築
+        const profileResult = await readHealthProfileFromGoogleDocs();
+        profileContent = profileResult.success ? profileResult.content || '' : '';
+
+        // session.messagesから直接ユーザーメッセージ数を算出（不要なDBクエリ回避）
+        const userMessageCount = session.messages.filter(m => m.role === 'user').length;
         hearingInput = await getHearingContext(
             user.id,
             { currentQuestionId: session.currentQuestionId, currentPriority: session.currentPriority },
             profileContent,
+            userMessageCount,
         );
 
         if (hearingInput) {
@@ -345,9 +341,8 @@ export async function POST(req: NextRequest) {
                 content: m.content
             }));
             hearingInput.conversationHistory = summarizeHistory(rawHistory);
-            // issue整理の承認/拒否でない場合のみissuesを渡す（承認済みなら不要）
-            if (!isIssueConfirmation && !isIssueRejection
-                && analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0) {
+            // issue承認/拒否は早期returnで処理済みのため、ここに来るのは通常メッセージのみ
+            if (analyzerIssues && Array.isArray(analyzerIssues) && analyzerIssues.length > 0) {
                 hearingInput.issuesForUser = analyzerIssues;
             }
             systemPrompt = buildHearingSystemPrompt(hearingInput);
@@ -405,7 +400,7 @@ export async function POST(req: NextRequest) {
                 systemInstruction: { parts: [{ text: systemPrompt }] },
                 contents,
                 generationConfig: {
-                    temperature: isProfileBuilding ? 0.4 : 0.4,
+                    temperature: currentMode === 'data_analysis' ? 0.7 : 0.4,
                     maxOutputTokens: 4096,
                 }
             })
@@ -610,11 +605,8 @@ export async function POST(req: NextRequest) {
                     ]
                 });
 
-                // issue整理で実行されたアクションもマージ
-                const allExecutedActions = [...issueExecutedActions, ...executedActions];
-
-                // Google Docs同期（アクション実行時のみ。issue整理は実行済みなのでeditor分のみ）
-                let syncStatus = issueExecutedActions.length > 0 ? 'synced' : 'not_needed';
+                // Google Docs同期（アクション実行時のみ）
+                let syncStatus = 'not_needed';
                 if (executedActions.length > 0) {
                     try {
                         const allSections = await prisma.healthProfileSection.findMany({
@@ -641,12 +633,12 @@ export async function POST(req: NextRequest) {
                     done: true,
                     sessionId: sessionIdForClosure,
                     mode: updatedMode,
-                    executedActions: allExecutedActions,
+                    executedActions,
                     pendingActions,
                     detectedIssues,
                     syncStatus,
-                    // issue処理フラグ（フロントが次のissueに進むために使用）
-                    issueProcessed: isIssueConfirmation || isIssueRejection,
+                    // issue処理は早期returnで対応済みのため、通常ストリームではfalse
+                    issueProcessed: false,
                 })}\n\n`));
 
             } catch (error) {
@@ -658,11 +650,5 @@ export async function POST(req: NextRequest) {
         }
     });
 
-    return new Response(stream, {
-        headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-        }
-    });
+    return new Response(stream, { headers: SSE_HEADERS });
 }

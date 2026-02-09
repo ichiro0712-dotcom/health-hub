@@ -31,6 +31,10 @@ export function buildHearingSystemPrompt(input: HearingAgentInput): string {
     ? `\n## 最初の質問について\n自然な挨拶（「健康プロフィールを充実させるために質問を進めさせてもらいますね。」等）を添えてから質問してください。`
     : `\n## 会話の流れ\n前の回答に対して簡潔な共感（「なるほど」「ありがとうございます」等）を示してから次の質問に移ってください。`;
 
+  const nextQuestionHint = input.nextQuestion
+    ? `\n## 次の質問（参考）\nユーザーが回答したら、共感を示した後、次は「${input.nextQuestion}」に自然に移ってください。ただし今は上の「現在の質問」にのみ集中してください。`
+    : '';
+
   return `あなたはH-Hubアシスタントです。ユーザーの健康プロフィールを充実させるために対話しています。
 
 ## あなたの役割
@@ -42,7 +46,7 @@ ${issueInstructions}
 **質問の意図**: ${input.currentQuestion.intent}
 **抽出すべき情報**: ${input.currentQuestion.extractionHints.join('、')}
 ${existingInfo}
-${greeting}
+${greeting}${nextQuestionHint}
 
 ## ルール
 1. **1度に1つの質問だけ**聞いてください

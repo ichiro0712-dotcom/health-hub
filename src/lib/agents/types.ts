@@ -53,6 +53,8 @@ export interface HearingAgentInput {
   conversationHistory: { role: string; content: string }[];
   isFirstQuestion: boolean;
   issuesForUser?: ProfileIssue[];
+  /** 次の質問（自然な会話遷移のためにHearing AIに渡す） */
+  nextQuestion?: string;
 }
 
 export interface ExtractedFact {

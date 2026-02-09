@@ -15,10 +15,12 @@
  * - 新規の場合はウェルカムメッセージ表示中にバックグラウンドでGoogle Docs同期
  */
 
-import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageCircle, Send, Loader2, X, RefreshCw, CloudOff, Cloud, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import { useChatModal } from '@/contexts/ChatModalContext';
 
 interface Message {
   id: string;
@@ -57,42 +59,6 @@ interface ChatHearingV2Props {
   isVisible?: boolean;
 }
 
-// 内部リンクのパターン: → /path or /path 形式を検出
-const LINK_PATTERN = /(?:→\s*)?(\/([\w\-\/]+))/g;
-
-function renderLineWithLinks(line: string, lineIndex: number): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-
-  const regex = new RegExp(LINK_PATTERN.source, 'g');
-  let match;
-
-  while ((match = regex.exec(line)) !== null) {
-    // マッチ前のテキスト
-    if (match.index > lastIndex) {
-      parts.push(line.slice(lastIndex, match.index));
-    }
-    const path = match[1];
-    parts.push(
-      <Link
-        key={`${lineIndex}-${match.index}`}
-        href={path}
-        className="text-teal-600 dark:text-teal-400 underline hover:text-teal-700 dark:hover:text-teal-300"
-      >
-        {path}
-      </Link>
-    );
-    lastIndex = regex.lastIndex;
-  }
-
-  // 残りのテキスト
-  if (lastIndex < line.length) {
-    parts.push(line.slice(lastIndex));
-  }
-
-  return parts.length > 0 ? parts : line;
-}
-
 // 1件のissueに対する整理提案メッセージを生成
 function buildSingleIssueProposal(issue: ProfileIssue, current: number, total: number): string {
   const label = issue.type === 'DUPLICATE' ? '重複' : issue.type === 'CONFLICT' ? '矛盾' : '古い情報';
@@ -121,6 +87,7 @@ function buildSingleIssueProposal(issue: ProfileIssue, current: number, total: n
 }
 
 export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: ChatHearingV2Props) {
+  const { setIsAIResponding } = useChatModal();
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -163,6 +130,11 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
       });
     }
   }, [isVisible]);
+
+  // isLoading変化時にChatModalContextに伝達（バックグラウンド動作フィードバック用）
+  useEffect(() => {
+    setIsAIResponding(isLoading);
+  }, [isLoading, setIsAIResponding]);
 
   // アンマウント時にストリーミングをキャンセル
   useEffect(() => {
@@ -247,7 +219,6 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
     }
 
     setIsInitializing(true);
-    setIsAnalyzing(true);
     setPendingActions([]);
 
     try {
@@ -277,7 +248,6 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
       toast.error('新規セッションの開始に失敗しました');
     } finally {
       setIsInitializing(false);
-      setIsAnalyzing(false);
     }
   };
 
@@ -332,6 +302,10 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
   const sendMessage = async (overrideMessage?: string) => {
     const messageToSend = overrideMessage || inputValue.trim();
     if (!messageToSend || isLoading) return;
+
+    // 前のストリーミングが残っていたらキャンセル（モーダル閉じ→開き→送信時の競合防止）
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
 
     if (!overrideMessage) {
       setInputValue('');
@@ -396,11 +370,11 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
           const remaining = analyzerIssues.slice(1);
           setAnalyzerIssues(remaining);
           if (remaining.length > 0) {
-            const nextIdx = analyzerIssues.length - remaining.length;
+            const nextIdx = analyzerIssues.length - remaining.length + 1;
             setMessages(prev => [...prev, {
               id: generateMessageId(),
               role: 'assistant' as const,
-              content: buildSingleIssueProposal(remaining[0], nextIdx + 1, analyzerIssues.length)
+              content: buildSingleIssueProposal(remaining[0], nextIdx, analyzerIssues.length)
             }]);
           }
         }
@@ -465,13 +439,17 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
       }
 
       let accumulatedText = '';
+      let sseBuffer = ''; // SSEチャンクバッファリング（行の途中切れ対策）
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        sseBuffer += chunk;
+        const lines = sseBuffer.split('\n');
+        // 最後の行が不完全な可能性があるのでバッファに残す
+        sseBuffer = lines.pop() || '';
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -508,11 +486,11 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
                   setAnalyzerIssues(remaining);
                   if (remaining.length > 0) {
                     // 次のissueを提案
-                    const nextIdx = analyzerIssues.length - remaining.length;
+                    const nextIdx = analyzerIssues.length - remaining.length + 1;
                     setMessages(prev => [...prev, {
                       id: generateMessageId(),
                       role: 'assistant' as const,
-                      content: buildSingleIssueProposal(remaining[0], nextIdx + 1, analyzerIssues.length)
+                      content: buildSingleIssueProposal(remaining[0], nextIdx, analyzerIssues.length)
                     }]);
                   }
                 }
@@ -713,21 +691,32 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
                       : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-md'
                   }`}
                 >
-                  <div className="text-sm whitespace-pre-wrap">
-                    {message.content.split('\n').map((line, i, arr) => {
-                      if (line.startsWith('**') && line.endsWith('**')) {
-                        return <strong key={i} className="block font-bold">{line.slice(2, -2)}</strong>;
-                      }
-                      if (line.startsWith('---')) {
-                        return <hr key={i} className="my-2 border-slate-300 dark:border-slate-600" />;
-                      }
-                      return (
-                        <Fragment key={i}>
-                          {renderLineWithLinks(line, i)}
-                          {i < arr.length - 1 && <br />}
-                        </Fragment>
-                      );
-                    })}
+                  <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-hr:my-2">
+                    {message.content ? (
+                      <ReactMarkdown
+                        components={{
+                          a: ({ href, children }) => {
+                            if (href?.startsWith('/')) {
+                              return (
+                                <Link href={href} className="text-teal-600 dark:text-teal-400 underline hover:text-teal-700 dark:hover:text-teal-300">
+                                  {children}
+                                </Link>
+                              );
+                            }
+                            return <a href={href} target="_blank" rel="noopener noreferrer" className="text-teal-600 dark:text-teal-400 underline">{children}</a>;
+                          },
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    ) : (
+                      // タイピングインジケーター（ストリーミング中でテキストがまだ空の場合）
+                      <span className="inline-flex gap-1">
+                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -757,6 +746,26 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
           >
             新しいチャットを始める
           </button>
+        </div>
+      )}
+
+      {/* issue整理の確認ボタン */}
+      {analyzerIssues.length > 0 && pendingActions.length === 0 && !isLoading && (
+        <div className="px-4 py-2 bg-orange-50 dark:bg-orange-900/30 border-t border-orange-200 dark:border-orange-700 flex-shrink-0">
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => sendMessage('はい')}
+              className="px-4 py-1.5 text-xs bg-teal-500 text-white rounded-full hover:bg-teal-600 transition-colors font-medium"
+            >
+              修正する
+            </button>
+            <button
+              onClick={() => sendMessage('スキップ')}
+              className="px-4 py-1.5 text-xs bg-slate-400 text-white rounded-full hover:bg-slate-500 transition-colors font-medium"
+            >
+              スキップ
+            </button>
+          </div>
         </div>
       )}
 
