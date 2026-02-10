@@ -86,6 +86,38 @@ function buildSingleIssueProposal(issue: ProfileIssue, current: number, total: n
   return proposalText;
 }
 
+// メッセージ内容からクイックリプライ候補を抽出
+interface QuickReply {
+  label: string;
+  message: string;
+}
+
+function extractQuickReplies(content: string): QuickReply[] {
+  // ウェルカムメニュー: 「１．〜」「２．〜」「３．〜」
+  const menuMatch = content.match(/[１1]．(.+?)[\n]/);
+  if (menuMatch) {
+    const replies: QuickReply[] = [];
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const m = line.match(/^[１-９1-9]．(.+)/);
+      if (m) {
+        replies.push({ label: m[1].trim(), message: m[0].trim() });
+      }
+    }
+    if (replies.length > 0) return replies;
+  }
+
+  // issue修正提案: 「こう修正してもよいですか？」
+  if (content.includes('修正してもよいですか')) {
+    return [
+      { label: 'はい、修正して', message: 'はい' },
+      { label: 'スキップ', message: 'スキップ' },
+    ];
+  }
+
+  return [];
+}
+
 export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: ChatHearingV2Props) {
   const { setIsAIResponding } = useChatModal();
   const [isLoading, setIsLoading] = useState(false);
@@ -713,6 +745,26 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
                 </div>
               </div>
             )}
+            {/* クイックリプライボタン: 最後のアシスタントメッセージから選択肢を抽出 */}
+            {!isLoading && messages.length > 0 && (() => {
+              const lastMsg = messages[messages.length - 1];
+              if (lastMsg?.role !== 'assistant' || !lastMsg.content) return null;
+              const replies = extractQuickReplies(lastMsg.content);
+              if (replies.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-2 mt-2 px-1">
+                  {replies.map((reply, i) => (
+                    <button
+                      key={i}
+                      onClick={() => sendMessage(reply.message)}
+                      className="px-3 py-1.5 text-xs font-medium rounded-full border border-teal-300 dark:border-teal-600 text-teal-700 dark:text-teal-300 bg-white dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/30 active:bg-teal-100 dark:active:bg-teal-900/50 transition-colors"
+                    >
+                      {reply.label}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
             <div ref={messagesEndRef} />
           </>
         )}
