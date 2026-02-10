@@ -132,7 +132,14 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
   const [pendingActions, setPendingActions] = useState<ProfileAction[]>([]);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [chatMode, setChatMode] = useState<string | null>(null);
-  const [analyzerIssues, setAnalyzerIssues] = useState<ProfileIssue[]>([]);
+  const [analyzerIssues, setAnalyzerIssuesRaw] = useState<ProfileIssue[]>([]);
+  const [isIssueBannerHidden, setIsIssueBannerHidden] = useState(false);
+  // issuesをセットする際にバナーも再表示する
+  const setAnalyzerIssues = useCallback((issues: ProfileIssue[] | ((prev: ProfileIssue[]) => ProfileIssue[])) => {
+    setAnalyzerIssuesRaw(issues);
+    if (typeof issues === 'function') return; // 関数型更新の場合はslice等なのでバナー状態維持
+    if (issues.length > 0) setIsIssueBannerHidden(false);
+  }, []);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -662,7 +669,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
       )}
 
       {/* プロフィール重複・矛盾の検出結果 */}
-      {analyzerIssues.length > 0 && (
+      {analyzerIssues.length > 0 && !isIssueBannerHidden && (
         <div className="px-4 py-2 bg-orange-50 dark:bg-orange-900/30 border-b border-orange-200 dark:border-orange-700 flex-shrink-0">
           <p className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-1">
             プロフィールに整理が必要な箇所があります:
@@ -676,12 +683,21 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
             ))}
           </ul>
           <button
-            onClick={() => setAnalyzerIssues([])}
+            onClick={() => setIsIssueBannerHidden(true)}
             className="mt-1 text-[10px] text-orange-500 dark:text-orange-400 hover:underline"
           >
             閉じる
           </button>
         </div>
+      )}
+      {/* バナー非表示時の再表示ボタン */}
+      {analyzerIssues.length > 0 && isIssueBannerHidden && (
+        <button
+          onClick={() => setIsIssueBannerHidden(false)}
+          className="w-full px-4 py-1.5 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-700 flex-shrink-0 text-[10px] text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors"
+        >
+          整理が必要な箇所があります（{analyzerIssues.length}件） - タップで表示
+        </button>
       )}
 
       {/* メッセージエリア */}
