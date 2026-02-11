@@ -12,6 +12,7 @@
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
 import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import prisma from '@/lib/prisma';
+import { getAdminPrompt, getAdminConfig, getAdminNumber } from '@/lib/admin-prompt';
 
 // ============================================
 // 型定義
@@ -51,12 +52,28 @@ export interface DetectedIssue {
 }
 
 // ============================================
-// 定数
+// 定数（デフォルト値。DB に値があればそちらを優先）
 // ============================================
 
 export const CONFIDENCE_THRESHOLD_DEFAULT = 0.8;
 export const CONFIDENCE_THRESHOLD_DELETE = 0.95;
 export const MAX_HISTORY_MESSAGES = 20;
+
+// ============================================
+// DB連動の定数取得
+// ============================================
+
+export async function getConfidenceThresholdDefault(): Promise<number> {
+    return getAdminNumber('chat.confidence_threshold_default', CONFIDENCE_THRESHOLD_DEFAULT);
+}
+
+export async function getConfidenceThresholdDelete(): Promise<number> {
+    return getAdminNumber('chat.confidence_threshold_delete', CONFIDENCE_THRESHOLD_DELETE);
+}
+
+export async function getMaxHistoryMessages(): Promise<number> {
+    return getAdminNumber('chat.max_history_messages', MAX_HISTORY_MESSAGES);
+}
 
 const MODE_LABELS: Record<ChatMode, string> = {
     profile_building: '健康プロフィール構築',
@@ -68,49 +85,63 @@ const MODE_LABELS: Record<ChatMode, string> = {
 // モード検出
 // ============================================
 
+// デフォルトルール（DBに値がない場合のフォールバック）
+const DEFAULT_MODE_DETECTION_RULES = {
+    rules: [
+        { id: 'explicit_1', pattern: '^[1１]$|プロフィール', mode: 'profile_building' as ChatMode, confidence: 1.0 },
+        { id: 'explicit_2', pattern: '^[2２]$|分析|アドバイス', mode: 'data_analysis' as ChatMode, confidence: 1.0 },
+        { id: 'explicit_3', pattern: '^[3３]$|使い方|ヘルプ', mode: 'help' as ChatMode, confidence: 1.0 },
+        { id: 'auto_profile', pattern: 'おまかせ|お任せ|始め|お願い|やって|進めて', mode: 'profile_building' as ChatMode, confidence: 0.9 },
+        { id: 'auto_profile_theme', pattern: '充実|健康診断.*教|医療データ', mode: 'profile_building' as ChatMode, confidence: 0.9 },
+        { id: 'auto_help_device', pattern: 'スマートウォッチ|Fitbit|fitbit|Gemini|ChatGPT|連携', mode: 'help' as ChatMode, confidence: 0.9 },
+        { id: 'auto_resume', pattern: '前回の続き', mode: 'profile_building' as ChatMode, confidence: 0.6 },
+        { id: 'auto_data', pattern: '高い|低い|正常|異常|基準|数値|推移|変化|改善|血圧|コレステロール|血糖|HbA1c', mode: 'data_analysis' as ChatMode, confidence: 0.7 },
+        { id: 'auto_help', pattern: 'どうすれば|やり方|方法|ページ|画面|ボタン|設定|登録', mode: 'help' as ChatMode, confidence: 0.7 },
+    ],
+    defaultMode: 'profile_building' as ChatMode,
+    defaultConfidence: 0.5,
+};
+
+interface ModeDetectionRules {
+    rules: { id: string; pattern: string; mode: ChatMode; confidence: number; label?: string }[];
+    defaultMode: ChatMode;
+    defaultConfidence: number;
+}
+
+/**
+ * 同期版 detectMode（既存コードとの後方互換性を維持）
+ */
 export function detectMode(message: string): ModeDetectionResult {
+    return detectModeWithRules(message, DEFAULT_MODE_DETECTION_RULES);
+}
+
+/**
+ * 非同期版 detectMode（DBからルールを取得）
+ */
+export async function detectModeAsync(message: string): Promise<ModeDetectionResult> {
+    const rules = await getAdminConfig<ModeDetectionRules>(
+        'chat.mode_detection_rules',
+        DEFAULT_MODE_DETECTION_RULES
+    );
+    return detectModeWithRules(message, rules);
+}
+
+function detectModeWithRules(message: string, config: ModeDetectionRules): ModeDetectionResult {
     const trimmed = message.trim();
 
-    // 明示的な番号選択
-    if (/^[1１]$/.test(trimmed) || /プロフィール/.test(trimmed)) {
-        return { mode: 'profile_building', confidence: 1.0 };
-    }
-    if (/^[2２]$/.test(trimmed) || /分析|アドバイス/.test(trimmed)) {
-        return { mode: 'data_analysis', confidence: 1.0 };
-    }
-    if (/^[3３]$/.test(trimmed) || /使い方|ヘルプ/.test(trimmed)) {
-        return { mode: 'help', confidence: 1.0 };
-    }
-
-    // おまかせ・始めたい系 → プロフィール構築
-    if (/おまかせ|お任せ|始め|お願い|やって|進めて/.test(trimmed)) {
-        return { mode: 'profile_building', confidence: 0.9 };
+    for (const rule of config.rules) {
+        try {
+            const regex = new RegExp(rule.pattern);
+            if (regex.test(trimmed)) {
+                return { mode: rule.mode, confidence: rule.confidence };
+            }
+        } catch {
+            // 無効な正規表現はスキップ
+            console.warn(`[detectMode] Invalid regex pattern: ${rule.pattern}`);
+        }
     }
 
-    // テーマキーワード
-    if (/充実|健康診断.*教|医療データ/.test(trimmed)) {
-        return { mode: 'profile_building', confidence: 0.9 };
-    }
-    if (/スマートウォッチ|Fitbit|fitbit|Gemini|ChatGPT|連携/.test(trimmed)) {
-        return { mode: 'help', confidence: 0.9 };
-    }
-
-    // 再開セッション
-    if (/前回の続き/.test(trimmed)) {
-        // 再開時はデフォルトでprofile_building（セッション側でmodeがあればそちら優先）
-        return { mode: 'profile_building', confidence: 0.6 };
-    }
-
-    // 自由テキストのヒューリスティック
-    if (/高い|低い|正常|異常|基準|数値|推移|変化|改善|血圧|コレステロール|血糖|HbA1c/.test(trimmed)) {
-        return { mode: 'data_analysis', confidence: 0.7 };
-    }
-    if (/どうすれば|やり方|方法|ページ|画面|ボタン|設定|登録/.test(trimmed)) {
-        return { mode: 'help', confidence: 0.7 };
-    }
-
-    // デフォルト: プロフィール構築
-    return { mode: 'profile_building', confidence: 0.5 };
+    return { mode: config.defaultMode, confidence: config.defaultConfidence };
 }
 
 // ============================================
@@ -130,17 +161,18 @@ export function stripModeSwitch(response: string): string {
 // システムプロンプト構築
 // ============================================
 
+/**
+ * 同期版（既存コードとの後方互換性）
+ */
 export function buildSystemPrompt(context: PromptContext): string {
     const base = buildBasePrompt(context.mode);
 
     switch (context.mode) {
         case 'profile_building':
-            // ヒアリングエージェント用のinputがあれば、集中型プロンプトを使用
             if (context.hearingInput) {
                 const { buildHearingSystemPrompt } = require('@/lib/agents/hearing-agent');
                 return buildHearingSystemPrompt(context.hearingInput);
             }
-            // フォールバック: 従来のモノリシックプロンプト
             return base + buildProfileBuildingPrompt(
                 context.profileContent,
                 context.answeredQuestionIds || [],
@@ -152,6 +184,66 @@ export function buildSystemPrompt(context: PromptContext): string {
         case 'help':
             return base + buildHelpPrompt();
     }
+}
+
+/**
+ * 非同期版（DBからプロンプトを取得）
+ */
+export async function buildSystemPromptAsync(context: PromptContext): Promise<string> {
+    const base = await buildBasePromptAsync(context.mode);
+
+    switch (context.mode) {
+        case 'profile_building':
+            if (context.hearingInput) {
+                const { buildHearingSystemPromptAsync } = require('@/lib/agents/hearing-agent');
+                if (typeof buildHearingSystemPromptAsync === 'function') {
+                    return buildHearingSystemPromptAsync(context.hearingInput);
+                }
+                const { buildHearingSystemPrompt } = require('@/lib/agents/hearing-agent');
+                return buildHearingSystemPrompt(context.hearingInput);
+            }
+            return base + buildProfileBuildingPrompt(
+                context.profileContent,
+                context.answeredQuestionIds || [],
+                context.currentQuestionId || null,
+                context.currentPriority || 3
+            );
+        case 'data_analysis':
+            return base + await buildDataAnalysisPromptAsync(context.profileContent, context.recordsContent);
+        case 'help':
+            return base + await buildHelpPromptAsync();
+    }
+}
+
+async function buildBasePromptAsync(mode: ChatMode): Promise<string> {
+    const template = await getAdminPrompt('chat.base_prompt', '');
+    if (template) {
+        const modeTransition = await getAdminPrompt('chat.mode_transition', buildModeTransitionInstructions(mode));
+        return template
+            .replace(/\$\{MODE_LABEL\}/g, MODE_LABELS[mode])
+            .replace(/\$\{MODE_TRANSITION_INSTRUCTIONS\}/g, modeTransition.replace(/\$\{MODE_LABEL\}/g, MODE_LABELS[mode]))
+            + '\n\n';
+    }
+    return buildBasePrompt(mode);
+}
+
+async function buildDataAnalysisPromptAsync(profileContent: string, recordsContent: string): Promise<string> {
+    const template = await getAdminPrompt('chat.data_analysis', '');
+    if (template) {
+        const truncatedRecords = recordsContent
+            ? `${recordsContent.substring(0, 8000)}${recordsContent.length > 8000 ? '\n...(以下省略)' : ''}`
+            : '（まだ記録がありません）';
+        return template
+            .replace(/\$\{PROFILE_CONTENT\}/g, profileContent || '（まだ情報がありません）')
+            .replace(/\$\{RECORDS_CONTENT\}/g, truncatedRecords);
+    }
+    return buildDataAnalysisPrompt(profileContent, recordsContent);
+}
+
+async function buildHelpPromptAsync(): Promise<string> {
+    const template = await getAdminPrompt('chat.help', '');
+    if (template) return template;
+    return buildHelpPrompt();
 }
 
 // --- 共通ベース ---
@@ -636,13 +728,25 @@ export function sanitizeUserInput(input: string): string {
         .trim();
 }
 
+/**
+ * 非同期版 summarizeHistory（DBから最大メッセージ数を取得）
+ */
+export async function summarizeHistoryAsync(messages: { role: string; content: string }[]): Promise<{ role: string; content: string }[]> {
+    const maxMessages = await getMaxHistoryMessages();
+    return summarizeHistoryWithLimit(messages, maxMessages);
+}
+
 export function summarizeHistory(messages: { role: string; content: string }[]): { role: string; content: string }[] {
-    if (messages.length <= MAX_HISTORY_MESSAGES) {
+    return summarizeHistoryWithLimit(messages, MAX_HISTORY_MESSAGES);
+}
+
+function summarizeHistoryWithLimit(messages: { role: string; content: string }[], maxMessages: number): { role: string; content: string }[] {
+    if (messages.length <= maxMessages) {
         return messages;
     }
 
-    const oldMessages = messages.slice(0, messages.length - MAX_HISTORY_MESSAGES);
-    const recentMessages = messages.slice(messages.length - MAX_HISTORY_MESSAGES);
+    const oldMessages = messages.slice(0, messages.length - maxMessages);
+    const recentMessages = messages.slice(messages.length - maxMessages);
 
     const topics = new Set<string>();
     for (const msg of oldMessages) {
@@ -756,9 +860,22 @@ export async function executeProfileAction(
         return { success: true };
     }
 
-    const sectionId = action.section_id;
-    const sectionMeta = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === sectionId);
+    let sectionId = action.section_id;
+    let sectionMeta = DEFAULT_PROFILE_CATEGORIES.find(c => c.id === sectionId);
+
+    // AIがsection_idにタイトル文字列を返す場合のフォールバック（タイトルから逆引き）
     if (!sectionMeta) {
+        sectionMeta = DEFAULT_PROFILE_CATEGORIES.find(c =>
+            c.title === sectionId || c.title.includes(sectionId) || sectionId.includes(c.title)
+        );
+        if (sectionMeta) {
+            console.log(`[executeProfileAction] Resolved section title "${sectionId}" → id "${sectionMeta.id}"`);
+            sectionId = sectionMeta.id;
+        }
+    }
+
+    if (!sectionMeta) {
+        console.error(`[executeProfileAction] Unknown section: ${sectionId}`);
         return { success: false, error: `Unknown section: ${sectionId}` };
     }
 
@@ -767,6 +884,10 @@ export async function executeProfileAction(
     });
 
     let newContent = existingSection?.content || '';
+    const originalContent = newContent;
+
+    // target_textの正規化（AIの出力にスペース差分があることがある）
+    const normalizeForMatch = (text: string) => text.trim().replace(/\s+/g, ' ');
 
     switch (action.type) {
         case 'ADD':
@@ -779,24 +900,42 @@ export async function executeProfileAction(
 
         case 'UPDATE':
             if (action.target_text && action.new_text) {
+                const targetNorm = normalizeForMatch(action.target_text);
                 const lines = newContent.split('\n');
-                const updatedLines = lines.map(line =>
-                    line.includes(action.target_text!) ? action.new_text! : line
-                );
-                newContent = updatedLines.join('\n');
+                let matched = false;
+                const updatedLines = lines.map(line => {
+                    if (normalizeForMatch(line).includes(targetNorm)) {
+                        matched = true;
+                        return action.new_text!;
+                    }
+                    return line;
+                });
+                if (matched) {
+                    newContent = updatedLines.join('\n');
+                } else {
+                    console.warn(`[executeProfileAction] UPDATE: target not found in "${sectionId}". target="${action.target_text}"`);
+                }
             }
             break;
 
         case 'DELETE':
             if (action.target_text) {
+                const targetNorm = normalizeForMatch(action.target_text);
                 const lines = newContent.split('\n');
                 const filteredLines = lines.filter(line =>
-                    !line.includes(action.target_text!)
+                    !normalizeForMatch(line).includes(targetNorm)
                 );
-                newContent = filteredLines.join('\n').trim();
+                if (filteredLines.length < lines.length) {
+                    newContent = filteredLines.join('\n').trim();
+                } else {
+                    console.warn(`[executeProfileAction] DELETE: target not found in "${sectionId}". target="${action.target_text}"`);
+                }
             }
             break;
     }
+
+    const contentChanged = newContent !== originalContent;
+    console.log(`[executeProfileAction] ${action.type} on "${sectionId}": changed=${contentChanged}, target="${action.target_text?.substring(0, 50)}"`);
 
     await prisma.healthProfileSection.upsert({
         where: { userId_categoryId: { userId, categoryId: sectionId } },

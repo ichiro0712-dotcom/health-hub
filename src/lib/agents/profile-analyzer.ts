@@ -78,7 +78,15 @@ async function callAnalyzerAI(input: ProfileAnalyzerInput): Promise<ProfileAnaly
     })
     .join('\n');
 
+  // section_idの有効値リスト（AIが正しいIDを使うよう指示）
+  const sectionIdMap = DEFAULT_PROFILE_CATEGORIES
+    .map(c => `"${c.id}" = ${c.title}`)
+    .join('\n');
+
   const prompt = `あなたは健康プロフィール分析AIです。以下の2つのタスクを**必ず両方**実行してください。
+
+## セクションIDマッピング（★重要: sectionId と section_id には必ず以下の英語IDを使ってください。タイトル文字列は使わないこと）
+${sectionIdMap}
 
 ## タスク1: 重複・矛盾の検出（重要）
 
@@ -106,13 +114,13 @@ ${unansweredQuestions}
   "issues": [
     {
       "type": "DUPLICATE" | "CONFLICT" | "OUTDATED",
-      "sectionId": "セクションID",
+      "sectionId": "英語のセクションID（例: basic_attributes, exercise など。タイトルではない）",
       "description": "問題の説明（日本語、具体的にどの行が重複/矛盾しているか記述）",
       "existingTexts": ["重複テキスト1", "重複テキスト2"],
       "suggestedResolution": "推奨される解決方法（日本語）",
       "suggestedAction": {
         "type": "UPDATE" | "DELETE",
-        "section_id": "セクションID",
+        "section_id": "英語のセクションID（例: basic_attributes, exercise など。必ず上記マッピングの英語IDを使うこと）",
         "target_text": "削除または更新する対象テキスト（プロフィール内の正確な文字列）",
         "new_text": "新しいテキスト（UPDATEの場合のみ）",
         "reason": "理由",

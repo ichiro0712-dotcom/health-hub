@@ -6,7 +6,7 @@ v1（CHAT_HEARING_SPEC.md）は固定質問リスト＋進捗管理方式。v2�
 
 - 固定質問リスト → AIが自律的に対話
 - HealthQuestionProgress テーブルは質問進捗管理に使用（回答済みquestionIdを記録）
-- Google Docsを Single Source of Truth として活用
+- **DB（healthProfileSection）を Single Source of Truth として活用**（v2.2で変更: Google Docs依存を廃止）
 - ストリーミング応答（SSE）対応
 - 健康データの分析・アドバイス機能を追加
 - 動的ウェルカムメッセージ（データ状態検出）
@@ -20,34 +20,57 @@ v2の単一LLM呼び出しを**3つの役割特化AI**に分離:
 - プロフィール未完成時の番号選択メニューを廃止、即質問開始に変更
 - 重複・矛盾検出を専用AIで確実に実行
 
+### v2.2: DBをSingle Source of Truthに変更
+
+Google Docs依存を排除し、**DB（healthProfileSection テーブル）を正のデータソース**に変更:
+
+- Profile Analyzerのデータ読み取り元をGoogle Docs → DB に変更
+- Hearing AIのセクション情報もDB から取得
+- `buildProfileContentFromDB()` ヘルパー関数を導入
+- Google Docsは**同期先（Write先）としてのみ使用**（読み取りはdata_analysisモードのみ）
+- `executeProfileAction`のテキストマッチングにホワイトスペース正規化を導入
+- issue処理完了後 → 通常質問フローへの自動遷移を実装
+- HealthProfileClient のチャット更新イベント時に `hasChanges` リセットで整合性確保
+
+### v2.3: issue処理の信頼性向上
+
+issue処理中にAIが誤ったsection_idを返す問題や、前のissueの文脈が混入する問題を修正:
+
+- `executeProfileAction`にsection_idのタイトル→ID逆引きフォールバックを追加
+- Profile Analyzerのプロンプトにsection_idマッピング表を明示（英語ID使用を強制）
+- Hearing Agentのissue専用プロンプトにissue文脈分離ルールを追加（処理済みissueの混入防止）
+- フロントエンドのストリーミング表示フィルタリングを強化（コードブロック・未閉じタグ除去）
+
 ---
 
 ## アーキテクチャ: 3エージェントパイプライン
 
 ### 核心的な設計
 
-**Google Docsを「信頼できる唯一の情報源（Single Source of Truth）」として扱い、プロフィール構築時は3つの役割特化AIがパイプラインで処理する**
+**DB（healthProfileSection）を「信頼できる唯一の情報源（Single Source of Truth）」として扱い、プロフィール構築時は3つの役割特化AIがパイプラインで処理する**
+
+> **v2.2変更**: Google Docsは同期先（Write先）としてのみ使用。プロフィール読み取りはすべてDBから行う（data_analysisモードのGoogle Docs読み取りを除く）。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Google Docs                              │
-│  ┌─────────────────┐  ┌─────────────────┐                   │
-│  │ 健康プロフィール  │  │   診断記録       │                   │
-│  │ (HEALTH_PROFILE) │  │   (RECORDS)      │                   │
-│  └─────────────────┘  └─────────────────┘                   │
-│            ↓                    ↓                            │
-│         READ (チャット開始時 / 手動同期時 / セッション再開時)  │
+│         DB（healthProfileSection テーブル）                   │
+│  ┌─────────────────────────────────────────────────────┐     │
+│  │ sections: title, content, orderIndex per user        │     │
+│  └─────────────────────────────────────────────────────┘     │
+│            ↓ READ（buildProfileContentFromDB）               │
+│  チャット開始時 / プロフィールチェック要求時 /                  │
+│  ヒアリング時のセクション情報取得                              │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │          Stage 1: Profile Analyzer（セッション開始時）       │
-│  - プロフィール全文を分析                                    │
+│  - DBからプロフィール全文を読み取り分析                       │
 │  - 重複・矛盾・古い情報を検出                               │
 │  - 未入力の質問リストをpriority順で生成                      │
 │  - Temperature: 0.1、JSON出力のみ                           │
 │  - 実行タイミング: セッション新規作成時 / 手動同期時 /        │
-│    セッション再開時（GET /api/health-chat/v2/session）        │
+│    プロフィールチェック要求時                                 │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -73,12 +96,36 @@ v2の単一LLM呼び出しを**3つの役割特化AI**に分離:
 ┌─────────────────────────────────────────────────────────────┐
 │                 プロフィール更新                              │
 │                                                             │
-│  1. DB更新 (Prisma)                                         │
-│  2. Google Docs同期 (非同期)                                 │
+│  1. DB更新 (Prisma) ← 正のデータソース                      │
+│  2. Google Docs同期 (非同期) ← 同期先としてのみ使用          │
+│  3. CHAT_CONTENT_UPDATED_EVENT発火 → 健康プロフページ更新    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **data_analysis / help モードは従来の単一LLM方式を継続**（3エージェント化はprofile_buildingモードのみ）
+
+### データフロー詳細（v2.2）
+
+```
+プロフィール更新の流れ:
+  Hearing AI → EXTRACTED_DATA → Profile Editor → PROFILE_ACTION
+    → executeProfileAction() → DB(healthProfileSection)更新
+    → CHAT_CONTENT_UPDATED_EVENT発火
+    → HealthProfileClient が検知 → setSections() + setHasChanges(false)
+    → Google Docs非同期同期
+
+Profile Analyzer読み取りの流れ:
+  セッション開始 → buildProfileContentFromDB(userId)
+    → healthProfileSection.findMany() → テキスト形式に整形
+    → analyzeProfile()に渡す
+
+buildProfileContentFromDB()の出力形式:
+  【セクションタイトル1】
+  セクション内容1
+
+  【セクションタイトル2】
+  セクション内容2
+```
 
 ---
 
@@ -129,15 +176,15 @@ v2の単一LLM呼び出しを**3つの役割特化AI**に分離:
 
 ## セッション管理とウェルカムメッセージ
 
-### データ状態検出
+### データ状態検出（質問リストベース）
 
 セッション開始時（`GET /api/health-chat/v2/session`）に以下を並列取得:
 
 ```typescript
 interface DataStatus {
-    profileFilledCount: number;      // 入力済みプロフィールセクション数
-    profileTotalCount: number;       // 全セクション数（11）
-    missingSectionNames: string[];   // 未入力セクション名リスト
+    answeredQuestionCount: number;   // 回答済み質問数
+    totalQuestionCount: number;      // 全質問数（HEALTH_QUESTIONS）
+    isProfileComplete: boolean;      // プロフィールが完成しているか（全質問回答済み）
     hasRecords: boolean;             // 診断記録の有無
     hasFitbit: boolean;              // Fitbit連携の有無
     hasGoogleDocs: boolean;          // Google Docs連携の有無
@@ -177,7 +224,7 @@ interface DataStatus {
 ### セッション再開
 
 既存セッション（メッセージあり）を再開する場合:
-- Profile Analyzerを再実行（最新のプロフィール状態を反映）
+- Profile Analyzerは**再実行しない**（新規セッション・手動同期・ユーザー要求時のみ実行）
 - 前回の会話履歴を復元
 ```
 お帰りなさい！前回の続きから再開しますね。
@@ -188,9 +235,10 @@ interface DataStatus {
 | タイミング | トリガー | 目的 |
 |------------|----------|------|
 | セッション新規作成 | `GET /api/health-chat/v2/session`（セッションなし） | 初回分析・質問リスト生成 |
-| セッション再開 | `GET /api/health-chat/v2/session`（既存セッションあり） | 最新状態での再分析 |
 | 手動同期 | `POST /api/health-chat/v2/session`（同期ボタン押下） | ユーザー操作による再分析 |
 | プロフィールチェック要求 | ユーザーメッセージが正規表現にマッチ | オンデマンド分析 |
+
+> **注意**: セッション再開時にはAnalyzerを実行しません。これは不要なAPI呼び出しを避け、前回の会話の流れを尊重するためです。
 
 ### 番号選択への対応
 
@@ -210,6 +258,7 @@ profile_buildingモードでは、従来の単一プロンプトに代えて3つ
 - プロフィール全文 + 回答済み質問IDリストを入力
 - 重複・矛盾・古い情報をJSON形式で出力
 - 未入力の質問リストをpriority順で生成
+- **section_idマッピング表をプロンプトに明示**（AIが英語IDではなくタイトル文字列を返す問題を防止）
 - Gemini 2.0 Flash / Temperature: 0.1
 
 #### Stage 2: Hearing AI（毎回の対話で使用・ストリーミング）
@@ -310,26 +359,36 @@ Server-Sent Events (SSE) を使用してリアルタイムで応答を返す。
 
 **処理フロー（profile_buildingモード）:**
 1. 認証チェック・レート制限（共通rate-limitモジュール）
-2. プロフィールチェック要求の検出（正規表現マッチ → Profile Analyzer再実行）
+2. プロフィールチェック要求の検出（正規表現マッチ → Profile Analyzer再実行、**DBからプロフィール読み取り**）
 3. issue承認/拒否の検出 → 早期return（固定メッセージをSSEで返す、Geminiに流さない）
-4. Google Docsからプロフィール読み込み（該当セクションのみ抽出）
+4. **DBからプロフィール読み込み**（`buildProfileContentFromDB()` → 該当セクションのみ抽出）
 5. 会話履歴取得（最大20件、超過分はサマリー化）
 6. **Hearing AI**のシステムプロンプトを構築（現在の質問1つ + セクション情報 + 次の質問候補）
 7. Gemini 2.0 Flash にストリーミングリクエスト
 8. SSEでリアルタイム応答（`EXTRACTED_DATA`ブロックはフィルタリング）
 9. 応答完了後、`EXTRACTED_DATA`をパース
 10. **Profile Editor AI**に抽出データを渡してPROFILE_ACTIONを生成
-11. confidence ≥ 0.8 のアクションを自動実行（DELETEは 0.95以上）
+11. confidence ≥ 0.8 のアクションを自動実行（DELETEは 0.95以上）。**section_idがタイトル文字列の場合は逆引きでIDに変換**
 12. 低confidence のアクションはpendingActionsとして返却
 13. 質問進捗を更新（HealthQuestionProgress）
-14. メッセージ保存・Google Docs同期
+14. メッセージ保存・Google Docs同期（非同期）
 
 **処理フロー（data_analysis / helpモード）:**
 1-5は従来どおり単一システムプロンプトで処理
 
-**issue承認/拒否の早期return:**
-- ユーザーメッセージが承認パターン（`/^(はい|うん|OK|オッケー|お願い|実行|やって)/i`）にマッチ → issue修正実行 + 次のissue or 完了メッセージをSSEで返す
-- 拒否パターン（`/^(いいえ|いや|スキップ|しない|SkIP|パス|不要)/i`）にマッチ → スキップして次のissue or 完了メッセージをSSEで返す
+**issue承認/拒否の処理:**
+- issue処理中（`analyzerIssues`がリクエストに含まれる場合）はissue専用のシステムプロンプト（`buildIssueOnlySystemPrompt`）を使用
+- AIが`<!--ISSUE_DECISION-->`タグで判断結果を出力
+- 判断結果に基づき: approve → 修正実行、reject → スキップ、custom → カスタム修正、clarify → 追加説明
+- 次のissueがあれば次のissue提示メッセージをSSEで返す
+- **issue文脈分離**: 各issue処理時、プロンプトには現在のissueのみ記載。会話履歴に別のissueの話が含まれていても、処理済みissueの情報を使わないようAIに明示指示
+- **section_idの正確性**: issue提案内のsection_idをプロンプトに明記し、AIがcustomActionで同じIDを返すよう強制
+
+**issue処理完了後の自動遷移:**
+- 全issue処理完了（remaining issues が空）→ 遷移メッセージを表示
+- `pendingAutoMessage` パターンで通常質問フローを自動開始
+- 遷移メッセージ: 「プロフィールの整理が完了しました！では、引き続き健康プロフィールを充実させていきましょう。」
+- 800msの遅延後に「続きの質問をお願いします」を自動送信
 
 **SSEデータ形式:**
 ```
@@ -425,6 +484,20 @@ SSEストリーミング中、マーカーブロック（`EXTRACTED_DATA` or `PR
 - `insideMarker` フラグで状態管理
 - `pendingBuffer` で部分的な `<!--` マーカーを保持
 - チャンク単位の正規表現ではなく、ステートマシン方式で確実にフィルタリング
+
+### フロントエンド表示テキストフィルタリング（v2.3）
+
+フロントエンドの `displayText` 生成時に内部制御タグやコードブロックを除去:
+```typescript
+const displayText = accumulatedText
+  .replace(/<!--[A-Z_][\s\S]*?-->/g, '')       // 閉じた内部タグ（EXTRACTED_DATA, ISSUE_DECISION等）
+  .replace(/```json[\s\S]*?```/g, '')           // JSONコードブロック
+  .replace(/```[\s\S]*?```/g, '')               // 一般コードブロック
+  .replace(/<!--[A-Z_][^]*$/g, '')              // 未閉じの内部タグ（ストリーミング途中）
+  .trim();
+```
+- AIがコードブロック（```json...```）を出力した場合に黒いバーとして表示される問題を防止
+- ストリーミング途中で`<!--ISSUE_DECISION`等の開始タグだけ到達した場合の部分表示を防止
 
 ---
 
@@ -567,7 +640,21 @@ answeredAt: DateTime
 9. issue承認/拒否のボタン化
 10. モーダル/タブ動作によるチャット状態の永続化
 
-### Phase 5: 高度化（将来）
+### Phase 5: データ整合性強化 ✅
+1. DBをSSOTに変更（Google Docs依存を排除）
+2. `buildProfileContentFromDB()` ヘルパー関数導入
+3. `executeProfileAction` のテキストマッチングにホワイトスペース正規化
+4. HealthProfileClient のチャット更新イベント時に `hasChanges` リセット
+5. issue処理完了後 → 通常質問フローへの自動遷移
+6. issue処理中はissue専用プロンプトに集中（通常質問を混在させない）
+
+### Phase 5.1: issue処理の信頼性向上 ✅
+1. `executeProfileAction`にsection_idのタイトル→ID逆引きフォールバック追加
+2. Profile Analyzerプロンプトにsection_idマッピング表を明示（英語ID強制）
+3. Hearing Agentのissue専用プロンプトにissue文脈分離ルール追加（ルール7, 8）
+4. フロントエンド表示テキストフィルタリング強化（コードブロック・未閉じタグ除去）
+
+### Phase 6: 高度化（将来）
 1. Gemini 2.5への移行
 2. コンテキストキャッシング最適化
 3. 外部データの自動統合
@@ -578,20 +665,26 @@ answeredAt: DateTime
 
 ## 期待される改善効果
 
-| 問題 | v1 | v2 | v2.1 (3エージェント) |
-|------|-----|-----|-----|
-| 重複質問 | 頻発 | プロフィール全文参照 | 該当セクションのみ参照で集中 |
-| 重複情報 | 放置 | AIが検出（不安定） | 専用Analyzerで確実に検出 |
-| プロンプト肥大化 | - | 3000-5000トークン | ~800-1000トークン |
-| 番号メニュー | - | 5-11個の番号選択 | 未完成時は即質問開始 |
-| ADD/UPDATE判定 | - | 1つのLLMに全責任 | 専用Editorで精密判定 |
-| 古い情報 | 放置 | 診断記録と比較 | Analyzerが事前検出 |
-| 固定質問 | 硬直的 | AI が柔軟に対話 | 質問マスター+AI柔軟性の両立 |
-| コンテキスト | 断片的 | 全情報を把握 | 役割別に最適化されたコンテキスト |
-| 健康分析 | なし | データ分析・アドバイス | 同左 |
-| 使い方サポート | なし | FAQ情報から回答 | 同左 |
-| リアルタイム性 | 一括応答 | SSEストリーミング | 同左 |
-| ウェルカム | 固定 | 動的生成 | 動的生成+最初の質問を即表示 |
-| レート制限 | - | 各API独立 | 共通モジュールで統合 |
-| マークダウン | - | 手動パース | react-markdown |
-| チャット状態 | - | モーダル閉で消失 | タブ動作で永続化 |
+| 問題 | v1 | v2 | v2.1 (3エージェント) | v2.2 (DB SSOT) | v2.3 (issue信頼性) |
+|------|-----|-----|-----|-----|-----|
+| 重複質問 | 頻発 | プロフィール全文参照 | 該当セクションのみ参照で集中 | 同左 | 同左 |
+| 重複情報 | 放置 | AIが検出（不安定） | 専用Analyzerで確実に検出 | DB読み取りで確実性向上 | 同左 |
+| データソース | - | Google Docs | Google Docs | DB (healthProfileSection) | 同左 |
+| プロンプト肥大化 | - | 3000-5000トークン | ~800-1000トークン | 同左 | 同左 |
+| 番号メニュー | - | 5-11個の番号選択 | 未完成時は即質問開始 | 同左 | 同左 |
+| ADD/UPDATE判定 | - | 1つのLLMに全責任 | 専用Editorで精密判定 | 正規化マッチングで精度向上 | 同左 |
+| 古い情報 | 放置 | 診断記録と比較 | Analyzerが事前検出 | 同左 | 同左 |
+| 固定質問 | 硬直的 | AI が柔軟に対話 | 質問マスター+AI柔軟性の両立 | 同左 | 同左 |
+| コンテキスト | 断片的 | 全情報を把握 | 役割別に最適化されたコンテキスト | 同左 | 同左 |
+| 健康分析 | なし | データ分析・アドバイス | 同左 | 同左 | 同左 |
+| 使い方サポート | なし | FAQ情報から回答 | 同左 | 同左 | 同左 |
+| リアルタイム性 | 一括応答 | SSEストリーミング | 同左 | 同左 | 同左 |
+| ウェルカム | 固定 | 動的生成 | 動的生成+最初の質問を即表示 | 同左 | 同左 |
+| レート制限 | - | 各API独立 | 共通モジュールで統合 | 同左 | 同左 |
+| マークダウン | - | 手動パース | react-markdown | 同左 | 同左 |
+| チャット状態 | - | モーダル閉で消失 | タブ動作で永続化 | 同左 | 同左 |
+| issue完了後 | - | - | 処理停止 | 自動遷移→通常質問 | 同左 |
+| データ整合性 | - | - | GDocs上書き問題あり | hasChangesリセットで解決 | 同左 |
+| section_id精度 | - | - | AIがタイトル文字列を返す問題 | 同左 | IDマッピング表+逆引きで解決 |
+| issue文脈分離 | - | - | - | 前issue混入あり | ルール追加で完全分離 |
+| 表示タグ漏れ | - | - | - | コードブロック表示 | フィルタリング強化で解決 |

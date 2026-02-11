@@ -141,6 +141,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
     if (issues.length > 0) setIsIssueBannerHidden(false);
   }, []);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [pendingAutoMessage, setPendingAutoMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -174,6 +175,20 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
   useEffect(() => {
     setIsAIResponding(isLoading);
   }, [isLoading, setIsAIResponding]);
+
+  // issue完了後の自動メッセージ送信（isLoadingがfalseになるまで待機）
+  useEffect(() => {
+    if (!isLoading && pendingAutoMessage) {
+      const msg = pendingAutoMessage;
+      setPendingAutoMessage(null);
+      // 少し間を空けて自然な遷移にする
+      const timer = setTimeout(() => {
+        sendMessage(msg);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, pendingAutoMessage]);
 
   // アンマウント時にストリーミングをキャンセル
   useEffect(() => {
@@ -481,10 +496,17 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
 
               if (data.text) {
                 accumulatedText += data.text;
+                // 内部制御タグを除去（バックエンドから漏れた場合のセーフティネット）
+                const displayText = accumulatedText
+                  .replace(/<!--[A-Z_][\s\S]*?-->/g, '')
+                  .replace(/```json[\s\S]*?```/g, '')
+                  .replace(/```[\s\S]*?```/g, '')
+                  .replace(/<!--[A-Z_][^]*$/g, '')  // 未閉じの内部タグ（ストリーミング途中）
+                  .trim();
                 setMessages(prev =>
                   prev.map(m =>
                     m.id === assistantMessageId
-                      ? { ...m, content: accumulatedText }
+                      ? { ...m, content: displayText }
                       : m
                   )
                 );
@@ -503,7 +525,7 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
                   onContentUpdated?.();
                 }
 
-                // issue処理後: 1件目を消して次のissueを提案（または完了）
+                // issue処理後: 1件目を消して次のissueを提案（または完了→通常質問フローへ）
                 if (data.issueProcessed && analyzerIssues.length > 0) {
                   const remaining = analyzerIssues.slice(1);
                   setAnalyzerIssues(remaining);
@@ -515,6 +537,18 @@ export default function ChatHearingV2({ onContentUpdated, onClose, isVisible }: 
                       role: 'assistant' as const,
                       content: buildSingleIssueProposal(remaining[0], nextIdx, analyzerIssues.length)
                     }]);
+                  } else {
+                    // 全issue処理完了 → 遷移メッセージを表示し、通常質問フローを自動開始
+                    setAnalyzerIssuesRaw([]);
+                    setIsIssueBannerHidden(true);
+                    const transitionMsg = 'プロフィールの整理が完了しました！では、引き続き健康プロフィールを充実させていきましょう。';
+                    setMessages(prev => [...prev, {
+                      id: generateMessageId(),
+                      role: 'assistant' as const,
+                      content: transitionMsg,
+                    }]);
+                    // isLoading=falseになってから次の質問を自動リクエスト
+                    setPendingAutoMessage('続きの質問をお願いします');
                   }
                 }
 

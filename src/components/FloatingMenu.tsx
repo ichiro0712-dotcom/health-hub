@@ -28,6 +28,7 @@ import {
   Plane,
   HelpCircle,
   MessageCircle,
+  Shield,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useChatModal } from '@/contexts/ChatModalContext';
@@ -78,6 +79,10 @@ export default function FloatingMenu() {
     { href: '/medical-tour', icon: Plane, label: '医療ツアー' },
   ];
 
+  // 管理者判定
+  const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+  const isAdmin = session?.user?.email && adminEmails.includes(session.user.email.toLowerCase());
+
   const settingsItems = [
     { href: '/profile', icon: User, label: 'マイページ' },
     { href: '/help', icon: HelpCircle, label: 'ヘルプ・FAQ' },
@@ -85,6 +90,7 @@ export default function FloatingMenu() {
     { href: '/profile/settings/items/merge', icon: Layers, label: '検査項目の統合' },
     { href: '/settings/data-sync', icon: Smartphone, label: 'スマホデータ連携' },
     { href: '/settings/google-docs', icon: FileSpreadsheet, label: 'Google Docs連携' },
+    ...(isAdmin ? [{ href: '/admin', icon: Shield, label: '管理ページ' }] : []),
   ];
 
   if (!session) return null;
@@ -298,6 +304,18 @@ export default function FloatingMenu() {
               <span className="font-medium">ログアウト</span>
             </button>
           </nav>
+
+          {/* 開発用：管理ページリンク（リリース前に削除） */}
+          <div className="mt-4 border-t border-dashed border-slate-200 dark:border-slate-700 pt-4">
+            <Link
+              href="/admin"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
+            >
+              <Shield className="w-4 h-4" />
+              <span className="font-medium">管理ページ (DEV)</span>
+            </Link>
+          </div>
 
         </div>
       </div>

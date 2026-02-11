@@ -19,17 +19,23 @@ import {
     type ProfileAction,
     type DetectedIssue,
     detectMode,
+    detectModeAsync,
     detectModeSwitch,
     stripModeSwitch,
     buildSystemPrompt,
+    buildSystemPromptAsync,
     sanitizeUserInput,
     summarizeHistory,
+    summarizeHistoryAsync,
     executeProfileAction,
     updateQuestionProgress,
     getAnsweredQuestionIds,
+    getConfidenceThresholdDefault,
+    getConfidenceThresholdDelete,
     CONFIDENCE_THRESHOLD_DEFAULT,
     CONFIDENCE_THRESHOLD_DELETE,
 } from '@/lib/chat-prompts';
+import { logAdminError } from '@/lib/admin-error-log';
 import { analyzeProfile } from '@/lib/agents/profile-analyzer';
 import { HEALTH_QUESTIONS, getNextQuestion } from '@/constants/health-questions';
 import { DEFAULT_PROFILE_CATEGORIES } from '@/constants/health-profile';
@@ -39,6 +45,23 @@ import type { HearingAgentInput } from '@/lib/agents/types';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+
+/**
+ * DBからプロフィール内容をテキスト形式で取得（正のデータソース）
+ */
+async function buildProfileContentFromDB(userId: string): Promise<string> {
+    const sections = await prisma.healthProfileSection.findMany({
+        where: { userId },
+        orderBy: { orderIndex: 'asc' },
+    });
+
+    if (sections.length === 0) return '';
+
+    return sections
+        .filter(s => s.content.trim())
+        .map(s => `【${s.title}】\n${s.content}`)
+        .join('\n\n');
+}
 
 // ============================================
 // SSE共通ヘッダー・ヘルパー
@@ -204,7 +227,7 @@ export async function POST(req: NextRequest) {
     if (session.mode) {
         currentMode = session.mode as ChatMode;
     } else {
-        const detection = detectMode(userMessage);
+        const detection = await detectModeAsync(userMessage);
         currentMode = detection.mode;
         // セッションにモードを保存
         await prisma.healthChatSession.update({
@@ -216,10 +239,9 @@ export async function POST(req: NextRequest) {
     // プロフィールチェック要求を検出
     const isProfileCheckRequest = /プロフィール.{0,4}(チェック|確認|整理|見直し?|診断|点検)|重複.{0,4}(チェック|確認|整理|ない|ある)|矛盾.{0,4}(チェック|確認|整理|ない|ある)|ダブり|ダブって|問題ないか.{0,2}見て|大丈夫[?？]?$/.test(userMessage.trim());
 
-    // プロフィールチェック要求時はAnalyzerを実行して結果を返す
+    // プロフィールチェック要求時はAnalyzerを実行して結果を返す（DBを正のデータソースとして使用）
     if (isProfileCheckRequest) {
-        const profileResult = await readHealthProfileFromGoogleDocs();
-        const profileContent = profileResult.success ? profileResult.content || '' : '';
+        const profileContent = await buildProfileContentFromDB(user.id);
 
         // メッセージをDBに保存
         await prisma.healthChatMessage.create({
@@ -275,11 +297,10 @@ export async function POST(req: NextRequest) {
                 role: m.role,
                 content: m.content
             }));
-            systemPrompt = buildIssueOnlySystemPrompt(analyzerIssues, summarizeHistory(rawHistory));
+            systemPrompt = buildIssueOnlySystemPrompt(analyzerIssues, await summarizeHistoryAsync(rawHistory));
         } else {
-            // 通常のヒアリング: 質問を進める
-            const profileResult = await readHealthProfileFromGoogleDocs();
-            profileContent = profileResult.success ? profileResult.content || '' : '';
+            // 通常のヒアリング: 質問を進める（DBを正のデータソースとして使用）
+            profileContent = await buildProfileContentFromDB(user.id);
 
             const userMessageCount = session.messages.filter(m => m.role === 'user').length;
             hearingInput = await getHearingContext(
@@ -294,11 +315,11 @@ export async function POST(req: NextRequest) {
                     role: m.role,
                     content: m.content
                 }));
-                hearingInput.conversationHistory = summarizeHistory(rawHistory);
+                hearingInput.conversationHistory = await summarizeHistoryAsync(rawHistory);
                 systemPrompt = buildHearingSystemPrompt(hearingInput);
             } else {
                 // 質問が尽きた場合はフォールバック
-                systemPrompt = buildSystemPrompt({
+                systemPrompt = await buildSystemPromptAsync({
                     mode: currentMode,
                     profileContent,
                     recordsContent: '',
@@ -312,14 +333,14 @@ export async function POST(req: NextRequest) {
         ]);
         profileContent = profileResult.success ? profileResult.content || '' : '';
         recordsContent = recordsResult.success ? recordsResult.content || '' : '';
-        systemPrompt = buildSystemPrompt({
+        systemPrompt = await buildSystemPromptAsync({
             mode: currentMode,
             profileContent,
             recordsContent,
         });
     } else {
         // help モード
-        systemPrompt = buildSystemPrompt({
+        systemPrompt = await buildSystemPromptAsync({
             mode: currentMode,
             profileContent: '',
             recordsContent: '',
@@ -331,7 +352,7 @@ export async function POST(req: NextRequest) {
         role: m.role,
         content: m.content
     }));
-    const history = summarizeHistory(rawHistory);
+    const history = await summarizeHistoryAsync(rawHistory);
 
     // Gemini APIをストリーミングで呼び出し
     const contents = [
@@ -374,10 +395,12 @@ export async function POST(req: NextRequest) {
     const userIdForClosure = user.id;
     const modeForClosure = currentMode;
 
-    // フィルタリングするマーカー名を決定
+    // フィルタリングするマーカー（全内部タグを汎用的に除去）
+    // 対象: EXTRACTED_DATA, PROFILE_ACTION, MODE_SWITCH, ISSUE_DECISION, 将来追加されるタグ全て
+    const ALL_MARKER_NAMES = ['EXTRACTED_DATA', 'PROFILE_ACTION', 'ISSUE_DECISION', 'MODE_SWITCH'];
     const markerName = isProfileBuilding ? 'EXTRACTED_DATA' : 'PROFILE_ACTION';
-    const markerStart = `<!--${markerName}`;
-    const markerEnd = `${markerName}-->`;
+    const markerStart = '<!--';
+    const markerEnd = '-->';
 
     const stream = new ReadableStream({
         async start(controller) {
@@ -419,27 +442,33 @@ export async function POST(req: NextRequest) {
                                         }
                                     }
 
-                                    // 完全なブロックを除去
-                                    const fullBlockRegex = new RegExp(`<!--${markerName}[\\s\\S]*?${markerName}-->`, 'g');
-                                    textToProcess = textToProcess.replace(fullBlockRegex, '');
+                                    // 全内部タグを汎用的に除去（<!--TAG_NAME...TAG_NAME--> 形式）
+                                    for (const tag of ALL_MARKER_NAMES) {
+                                        const tagRegex = new RegExp(`<!--${tag}[\\s\\S]*?${tag}-->`, 'g');
+                                        textToProcess = textToProcess.replace(tagRegex, '');
+                                    }
+                                    // 1行形式の <!--TAG: value--> も除去
+                                    textToProcess = textToProcess.replace(/<!--[A-Z_]+:?\s[^>]*-->/g, '');
 
-                                    // MODE_SWITCHマーカーも除去
-                                    textToProcess = textToProcess.replace(/<!--MODE_SWITCH:\s*\w+\s*-->/g, '');
-
-                                    // ブロック開始が含まれているが終了がない場合
+                                    // ブロック開始が含まれているが終了がない場合（全タグ対応）
                                     const startIdx = textToProcess.indexOf(markerStart);
                                     if (startIdx !== -1) {
-                                        insideMarker = true;
-                                        const beforeBlock = textToProcess.substring(0, startIdx);
-                                        if (beforeBlock) {
-                                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: beforeBlock })}\n\n`));
+                                        // 内部タグの開始かどうかを判定
+                                        const afterStart = textToProcess.substring(startIdx + 4);
+                                        const isInternalTag = ALL_MARKER_NAMES.some(tag => afterStart.startsWith(tag)) || /^[A-Z_]+/.test(afterStart);
+                                        if (isInternalTag) {
+                                            insideMarker = true;
+                                            const beforeBlock = textToProcess.substring(0, startIdx);
+                                            if (beforeBlock) {
+                                                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: beforeBlock })}\n\n`));
+                                            }
+                                            continue;
                                         }
-                                        continue;
                                     }
 
-                                    // 部分的な開始マーカーを検出
+                                    // 部分的な開始マーカーを検出（`<!--` が末尾付近にある場合バッファに保持）
                                     const partialMarkerIdx = textToProcess.lastIndexOf('<!--');
-                                    if (partialMarkerIdx !== -1 && partialMarkerIdx > textToProcess.length - markerStart.length) {
+                                    if (partialMarkerIdx !== -1 && textToProcess.indexOf('-->', partialMarkerIdx) === -1) {
                                         pendingBuffer = textToProcess.substring(partialMarkerIdx);
                                         textToProcess = textToProcess.substring(0, partialMarkerIdx);
                                     }
@@ -502,7 +531,11 @@ export async function POST(req: NextRequest) {
                         for (const action of editorResult.actions) {
                             if (action.type === 'NONE') continue;
 
-                            const threshold = action.type === 'DELETE' ? CONFIDENCE_THRESHOLD_DELETE : CONFIDENCE_THRESHOLD_DEFAULT;
+                            const [thresholdDefault, thresholdDelete] = await Promise.all([
+                                getConfidenceThresholdDefault(),
+                                getConfidenceThresholdDelete(),
+                            ]);
+                            const threshold = action.type === 'DELETE' ? thresholdDelete : thresholdDefault;
 
                             if (action.confidence >= threshold) {
                                 const result = await executeProfileAction(userIdForClosure, action);
@@ -581,9 +614,12 @@ export async function POST(req: NextRequest) {
 
                 // メッセージを保存
                 const { responseText: cleanResponse } = parseExtractedData(fullResponse);
-                let finalCleanResponse = cleanResponse
-                    .replace(/<!--PROFILE_ACTION[\s\S]*?PROFILE_ACTION-->/g, '')
-                    .trim();
+                let finalCleanResponse = cleanResponse;
+                // 全内部タグを除去（DB保存用）
+                for (const tag of ALL_MARKER_NAMES) {
+                    finalCleanResponse = finalCleanResponse.replace(new RegExp(`<!--${tag}[\\s\\S]*?${tag}-->`, 'g'), '');
+                }
+                finalCleanResponse = finalCleanResponse.replace(/<!--[A-Z_]+:?\s[^>]*-->/g, '').trim();
                 finalCleanResponse = stripModeSwitch(finalCleanResponse);
 
                 await prisma.healthChatMessage.createMany({
@@ -630,6 +666,10 @@ export async function POST(req: NextRequest) {
 
             } catch (error) {
                 console.error('Streaming error:', error);
+                logAdminError('error', 'api_error', `Chat streaming error: ${error instanceof Error ? error.message : String(error)}`, {
+                    endpoint: '/api/health-chat/v2/stream',
+                    stack: error instanceof Error ? error.stack : undefined,
+                });
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'ストリーミング中にエラーが発生しました' })}\n\n`));
             } finally {
                 controller.close();

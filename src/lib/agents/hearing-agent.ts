@@ -95,7 +95,7 @@ function buildIssueInstructions(issues: ProfileIssue[]): string {
       OUTDATED: '古い情報',
     }[issue.type];
     const actionDesc = issue.suggestedAction
-      ? `\n   提案アクション: ${issue.suggestedAction.type === 'DELETE' ? '削除' : '更新'} - ${issue.suggestedAction.target_text || ''} → ${issue.suggestedAction.new_text || '（削除）'}`
+      ? `\n   提案アクション: ${issue.suggestedAction.type === 'DELETE' ? '削除' : '更新'} - ${issue.suggestedAction.target_text || ''} → ${issue.suggestedAction.new_text || '（削除）'}\n   section_id: "${issue.suggestedAction.section_id}"`
       : '';
     return `${i + 1}. 【${typeLabel}】${issue.description}\n   該当テキスト: ${issue.existingTexts.join(' / ')}\n   提案: ${issue.suggestedResolution}${actionDesc}`;
   }).join('\n');
@@ -119,7 +119,7 @@ ${issueDescriptions}
   "decision": "approve" | "reject" | "custom" | "clarify",
   "customAction": null | {
     "type": "UPDATE" | "DELETE",
-    "section_id": "セクションID",
+    "section_id": "英語のセクションID（例: basic_attributes, exercise 等。提案アクションのsection_idと同じ値を使うこと）",
     "target_text": "変更対象テキスト",
     "new_text": "新しいテキスト（DELETEの場合はnull）",
     "reason": "変更理由",
@@ -157,7 +157,9 @@ ${issueInstructions}
 3. **「では質問を進めます」「次の質問です」等の遷移も禁止です。** あなたの仕事はissue処理だけです。
 4. 応答は1〜2文で簡潔に（「了解しました、修正します。」「スキップしますね。」等）
 5. ユーザーが「終わり」「保存して」と言ったらセッション終了を提案してください
-6. 応答の最後に必ずISSUE_DECISIONブロックを出力してください。出力しないと処理が進みません。`;
+6. 応答の最後に必ずISSUE_DECISIONブロックを出力してください。出力しないと処理が進みません。
+7. **上記に記載されたissueのみ**を対象にしてください。会話履歴に別のissueの話が出ていても、それは既に処理済みです。現在のissueの情報だけを使ってください。
+8. **customActionのsection_idは上記に記載された section_id をそのまま使ってください**。タイトル文字列や別のIDを使わないこと。`;
 }
 
 /**

@@ -34,6 +34,23 @@ interface DataStatus {
     hasGoogleDocs: boolean;
 }
 
+/**
+ * DBからプロフィール内容をテキスト形式で取得（正のデータソースとしてDBを使う）
+ */
+async function buildProfileContentFromDB(userId: string): Promise<string> {
+    const sections = await prisma.healthProfileSection.findMany({
+        where: { userId },
+        orderBy: { orderIndex: 'asc' },
+    });
+
+    if (sections.length === 0) return '';
+
+    return sections
+        .filter(s => s.content.trim())
+        .map(s => `【${s.title}】\n${s.content}`)
+        .join('\n\n');
+}
+
 async function detectDataStatus(userId: string): Promise<DataStatus> {
     const [answeredIds, recordCount, fitbitAccount, googleDocsSettings] = await Promise.all([
         getAnsweredQuestionIds(userId),
@@ -163,13 +180,12 @@ export async function GET(req: NextRequest) {
             if (hasProfileGap) {
                 try {
                     // プロフィール分析 + 回答済み質問の取得を並行実行
-                    const answeredIds = await getAnsweredQuestionIds(user.id);
+                    const [answeredIds, profileContent] = await Promise.all([
+                        getAnsweredQuestionIds(user.id),
+                        buildProfileContentFromDB(user.id),
+                    ]);
 
-                    // Google Docsからプロフィールを読み込み
-                    const profileResult = await readHealthProfileFromGoogleDocs();
-                    const profileContent = profileResult.success ? profileResult.content || '' : '';
-
-                    // アナライザー実行
+                    // アナライザー実行（DBを正のデータソースとして使用）
                     analyzerResult = await analyzeProfile({
                         profileContent,
                         answeredQuestionIds: answeredIds,

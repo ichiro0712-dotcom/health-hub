@@ -202,6 +202,9 @@ export default function HealthProfileClient({ initialSections }: Props) {
             const result = await getHealthProfile();
             if (result.data) {
                 setSections(result.data);
+                // AIチャットがDBを更新したので、ページ側の変更フラグをリセット
+                // （古いデータでの上書き保存を防ぐ）
+                setHasChanges(false);
             }
         };
         window.addEventListener(CHAT_CONTENT_UPDATED_EVENT, handleChatUpdate);

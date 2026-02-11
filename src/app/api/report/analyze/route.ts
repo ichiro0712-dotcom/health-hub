@@ -3,11 +3,13 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getStructuredDataForAnalysis } from '@/app/actions/report';
 import { getToken } from 'next-auth/jwt';
+import { getAdminPrompt, getAdminConfig } from '@/lib/admin-prompt';
+import { logAdminError } from '@/lib/admin-error-log';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
 // 健康カテゴリの定義（ランク順）- 全カテゴリ平均50点基準
-const HEALTH_CATEGORIES = [
+const DEFAULT_HEALTH_CATEGORIES = [
     { id: 'risk_factors', name: 'リスク因子', rank: 'SS', avgScore: 50 },
     { id: 'diet_nutrition', name: '食習慣・栄養', rank: 'SS', avgScore: 50 },
     { id: 'sleep_recovery', name: '睡眠・リカバリー', rank: 'S', avgScore: 50 },
@@ -20,6 +22,10 @@ const HEALTH_CATEGORIES = [
     { id: 'digestion_gut', name: '消化器・吸収', rank: 'C', avgScore: 50 },
     { id: 'immunity_barrier', name: '免疫・バリア', rank: 'C', avgScore: 50 },
 ];
+
+async function getHealthCategories() {
+    return getAdminConfig('score.health_categories', DEFAULT_HEALTH_CATEGORIES);
+}
 
 interface CategoryScore {
     id: string;
@@ -113,10 +119,13 @@ export async function POST(req: NextRequest) {
 
         const { user, profile, records } = result.data;
 
+        // カテゴリ定義をDBから取得
+        const HEALTH_CATEGORIES = await getHealthCategories();
+
         // ステップ1: 総合スコア・カテゴリ別スコア・総合評価を一括で算出
-        const analysisPrompt = buildAnalysisPrompt(user, profile, records);
+        const analysisPrompt = buildAnalysisPrompt(user, profile, records, HEALTH_CATEGORIES);
         const analysisResponse = await callGeminiAPI(analysisPrompt);
-        const { totalScore, categoryScores, evaluation } = parseAnalysisResponse(analysisResponse);
+        const { totalScore, categoryScores, evaluation } = parseAnalysisResponse(analysisResponse, HEALTH_CATEGORIES);
 
         // ステップ2: 3種類のアドバイスを生成
         const belowAvgCategories = categoryScores
@@ -124,7 +133,7 @@ export async function POST(req: NextRequest) {
             .sort((a, b) => (a.avgScore - a.score) - (b.avgScore - b.score))
             .reverse();
 
-        const advicePrompt = buildAdvicePrompt(user, profile, records, categoryScores, belowAvgCategories);
+        const advicePrompt = buildAdvicePrompt(user, profile, records, categoryScores, belowAvgCategories, HEALTH_CATEGORIES);
         const adviceResponse = await callGeminiAPI(advicePrompt);
         const advices = parseAdviceResponse(adviceResponse, categoryScores);
 
@@ -142,7 +151,10 @@ export async function POST(req: NextRequest) {
 
     } catch (error) {
         console.error('Analysis error:', error);
-        // 詳細エラーは内部ログのみ、クライアントには汎化メッセージ
+        logAdminError('error', 'score_analysis_fail', `Score analysis error: ${error instanceof Error ? error.message : String(error)}`, {
+            endpoint: '/api/report/analyze',
+            stack: error instanceof Error ? error.stack : undefined,
+        });
         return NextResponse.json({ error: '分析に失敗しました' }, { status: 500 });
     }
 }
@@ -150,7 +162,8 @@ export async function POST(req: NextRequest) {
 function buildAnalysisPrompt(
     user: { age: number | null; name: string | null },
     profile: { title: string; content: string }[],
-    records: { date: string; title: string | null; results: { item: string; value: string; unit: string; evaluation: string }[] }[]
+    records: { date: string; title: string | null; results: { item: string; value: string; unit: string; evaluation: string }[] }[],
+    HEALTH_CATEGORIES: { id: string; name: string; rank: string; avgScore: number; description?: string }[] = DEFAULT_HEALTH_CATEGORIES,
 ): string {
     const profileText = profile.map(p => `【${p.title}】\n${p.content}`).join('\n\n');
     const recordsText = records.map(r => {
@@ -251,7 +264,8 @@ function buildAdvicePrompt(
     profile: { title: string; content: string }[],
     records: { date: string; title: string | null; results: { item: string; value: string; unit: string; evaluation: string }[] }[],
     categoryScores: CategoryScore[],
-    belowAvgCategories: CategoryScore[]
+    belowAvgCategories: CategoryScore[],
+    _HEALTH_CATEGORIES: { id: string; name: string; rank: string; avgScore: number }[] = DEFAULT_HEALTH_CATEGORIES,
 ): string {
     const profileText = profile.map(p => `【${p.title}】\n${p.content}`).join('\n\n');
     const recordsText = records.map(r => {
@@ -333,7 +347,7 @@ ${belowAvgText}
 - 回答文中で「SEX」「性行為」「性的活動」「パートナーとの親密な時間」などの表現は一切使用せず、「適度な運動」「軽い運動」「身体活動」などの一般的な運動表現に置き換えてください`;
 }
 
-function parseAnalysisResponse(response: string): {
+function parseAnalysisResponse(response: string, HEALTH_CATEGORIES: { id: string; name: string; rank: string; avgScore: number }[] = DEFAULT_HEALTH_CATEGORIES): {
     totalScore: number;
     categoryScores: CategoryScore[];
     evaluation: string;

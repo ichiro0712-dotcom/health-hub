@@ -509,3 +509,81 @@ model HealthQuestionProgress {
   @@index([userId])
   @@index([userId, sectionId])
 }
+
+// =====================================================
+// Admin Management Models
+// =====================================================
+
+// プロンプト・設定の管理テーブル
+model AdminPrompt {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  category    String
+  label       String
+  description String?  @db.Text
+  value       String   @db.Text
+  valueType   String   @default("text") // "text" | "json" | "number"
+  isActive    Boolean  @default(true)
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+}
+
+// ヘルスデータ項目の管理テーブル
+model AdminHealthItem {
+  id          String   @id @default(cuid())
+  itemName    String   @unique
+  displayName String?
+  minVal      Float
+  maxVal      Float
+  safeMin     Float?
+  safeMax     Float?
+  tags        String[]
+  description String?  @db.Text
+  orderIndex  Int      @default(0)
+  isActive    Boolean  @default(true)
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// 質問マスター管理テーブル
+model AdminHealthQuestion {
+  id               String   @id @default(cuid())
+  questionId       String   @unique
+  sectionId        String
+  priority         Int
+  question         String   @db.Text
+  intent           String   @db.Text
+  extractionHints  String[]
+  isActive         Boolean  @default(true)
+  orderIndex       Int      @default(0)
+  updatedBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([sectionId])
+  @@index([priority])
+}
+
+// バグ検知・エラーログテーブル
+model AdminErrorLog {
+  id          String    @id @default(cuid())
+  level       String
+  category    String
+  message     String    @db.Text
+  metadata    Json?
+  userId      String?
+  endpoint    String?
+  resolved    Boolean   @default(false)
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([category])
+  @@index([level])
+  @@index([createdAt])
+  @@index([resolved])
+}
