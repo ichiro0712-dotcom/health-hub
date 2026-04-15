@@ -18,22 +18,17 @@ import {
     type ChatMode,
     type ProfileAction,
     type DetectedIssue,
-    detectMode,
     detectModeAsync,
     detectModeSwitch,
     stripModeSwitch,
-    buildSystemPrompt,
     buildSystemPromptAsync,
     sanitizeUserInput,
-    summarizeHistory,
     summarizeHistoryAsync,
     executeProfileAction,
     updateQuestionProgress,
     getAnsweredQuestionIds,
     getConfidenceThresholdDefault,
     getConfidenceThresholdDelete,
-    CONFIDENCE_THRESHOLD_DEFAULT,
-    CONFIDENCE_THRESHOLD_DELETE,
 } from '@/lib/chat-prompts';
 import { logAdminError } from '@/lib/admin-error-log';
 import { analyzeProfile } from '@/lib/agents/profile-analyzer';
@@ -100,8 +95,11 @@ async function getHearingContext(
     session: { currentQuestionId: string | null; currentPriority: number },
     profileContent: string,
     userMessageCount: number,
+    answeredIds?: string[],
 ): Promise<HearingAgentInput | null> {
-    const answeredIds = await getAnsweredQuestionIds(userId);
+    if (!answeredIds) {
+        answeredIds = await getAnsweredQuestionIds(userId);
+    }
     const currentPriority = (session.currentPriority || 3) as 3 | 2 | 1;
 
     // 現在の質問を取得
@@ -280,6 +278,12 @@ export async function POST(req: NextRequest) {
 
     // issue情報はAIストリーミングに渡して自然言語で処理する（早期returnしない）
 
+    // data_analysisモードの場合、Google Docs読み取りを先行開始（awaitは後で）
+    const isDataAnalysis = currentMode === 'data_analysis';
+    const gdocsPromise = isDataAnalysis
+        ? Promise.all([readHealthProfileFromGoogleDocs(), readRecordsFromGoogleDocs()])
+        : null;
+
     // モードに応じてコンテキストを取得し、システムプロンプトを生成
     let profileContent = '';
     let recordsContent = '';
@@ -300,7 +304,12 @@ export async function POST(req: NextRequest) {
             systemPrompt = buildIssueOnlySystemPrompt(analyzerIssues, await summarizeHistoryAsync(rawHistory));
         } else {
             // 通常のヒアリング: 質問を進める（DBを正のデータソースとして使用）
-            profileContent = await buildProfileContentFromDB(user.id);
+            // answeredIdsとprofileContentを並列取得
+            const [fetchedProfileContent, answeredIds] = await Promise.all([
+                buildProfileContentFromDB(user.id),
+                getAnsweredQuestionIds(user.id),
+            ]);
+            profileContent = fetchedProfileContent;
 
             const userMessageCount = session.messages.filter(m => m.role === 'user').length;
             hearingInput = await getHearingContext(
@@ -308,6 +317,7 @@ export async function POST(req: NextRequest) {
                 { currentQuestionId: session.currentQuestionId, currentPriority: session.currentPriority },
                 profileContent,
                 userMessageCount,
+                answeredIds,
             );
 
             if (hearingInput) {
@@ -326,11 +336,8 @@ export async function POST(req: NextRequest) {
                 });
             }
         }
-    } else if (currentMode === 'data_analysis') {
-        const [profileResult, recordsResult] = await Promise.all([
-            readHealthProfileFromGoogleDocs(),
-            readRecordsFromGoogleDocs()
-        ]);
+    } else if (isDataAnalysis) {
+        const [profileResult, recordsResult] = await gdocsPromise!;
         profileContent = profileResult.success ? profileResult.content || '' : '';
         recordsContent = recordsResult.success ? recordsResult.content || '' : '';
         systemPrompt = await buildSystemPromptAsync({
@@ -398,7 +405,6 @@ export async function POST(req: NextRequest) {
     // フィルタリングするマーカー（全内部タグを汎用的に除去）
     // 対象: EXTRACTED_DATA, PROFILE_ACTION, MODE_SWITCH, ISSUE_DECISION, 将来追加されるタグ全て
     const ALL_MARKER_NAMES = ['EXTRACTED_DATA', 'PROFILE_ACTION', 'ISSUE_DECISION', 'MODE_SWITCH'];
-    const markerName = isProfileBuilding ? 'EXTRACTED_DATA' : 'PROFILE_ACTION';
     const markerStart = '<!--';
     const markerEnd = '-->';
 
@@ -527,24 +533,30 @@ export async function POST(req: NextRequest) {
                             sectionTitle,
                         });
 
-                        // アクションを実行
-                        for (const action of editorResult.actions) {
-                            if (action.type === 'NONE') continue;
+                        // アクションを実行（閾値を1回だけ取得し、アクションを並列実行）
+                        const [thresholdDefault, thresholdDelete] = await Promise.all([
+                            getConfidenceThresholdDefault(),
+                            getConfidenceThresholdDelete(),
+                        ]);
 
-                            const [thresholdDefault, thresholdDelete] = await Promise.all([
-                                getConfidenceThresholdDefault(),
-                                getConfidenceThresholdDelete(),
-                            ]);
+                        const actionableItems = editorResult.actions.filter(a => a.type !== 'NONE');
+                        const toExecute: ProfileAction[] = [];
+                        for (const action of actionableItems) {
                             const threshold = action.type === 'DELETE' ? thresholdDelete : thresholdDefault;
-
                             if (action.confidence >= threshold) {
-                                const result = await executeProfileAction(userIdForClosure, action);
-                                if (result.success) {
-                                    executedActions.push(action);
-                                }
+                                toExecute.push(action);
                             } else {
                                 pendingActions.push(action);
                             }
+                        }
+
+                        if (toExecute.length > 0) {
+                            const results = await Promise.all(
+                                toExecute.map(action => executeProfileAction(userIdForClosure, action))
+                            );
+                            results.forEach((result, i) => {
+                                if (result.success) executedActions.push(toExecute[i]);
+                            });
                         }
 
                         // 質問進捗を更新
@@ -629,27 +641,27 @@ export async function POST(req: NextRequest) {
                     ]
                 });
 
-                // Google Docs同期（アクション実行時のみ）
+                // Google Docs同期（アクション実行時のみ・fire-and-forget）
                 let syncStatus = 'not_needed';
                 if (executedActions.length > 0) {
-                    try {
-                        const allSections = await prisma.healthProfileSection.findMany({
-                            where: { userId: userIdForClosure },
-                            orderBy: { orderIndex: 'asc' }
-                        });
-
-                        await syncHealthProfileToGoogleDocs(
+                    syncStatus = 'pending';
+                    // 非同期で同期（レスポンスをブロックしない）
+                    prisma.healthProfileSection.findMany({
+                        where: { userId: userIdForClosure },
+                        orderBy: { orderIndex: 'asc' }
+                    }).then(allSections =>
+                        syncHealthProfileToGoogleDocs(
                             allSections.map(s => ({
                                 categoryId: s.categoryId,
                                 title: s.title,
                                 content: s.content,
                                 orderIndex: s.orderIndex
                             }))
-                        );
-                        syncStatus = 'synced';
-                    } catch {
-                        syncStatus = 'failed';
-                    }
+                        )
+                    ).catch(err => {
+                        console.error('Async Google Docs sync failed:', err);
+                        logAdminError('warning', 'google_docs_sync_async', `Async sync failed: ${err instanceof Error ? err.message : String(err)}`);
+                    });
                 }
 
                 // 完了イベントを送信

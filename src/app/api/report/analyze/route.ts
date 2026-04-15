@@ -111,16 +111,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'AI API not configured' }, { status: 500 });
         }
 
-        // 構造化データを取得
-        const result = await getStructuredDataForAnalysis();
+        // 構造化データとカテゴリ定義を並列取得
+        const [result, HEALTH_CATEGORIES] = await Promise.all([
+            getStructuredDataForAnalysis(),
+            getHealthCategories(),
+        ]);
         if (!result.success || !result.data) {
             return NextResponse.json({ error: result.error || 'Failed to get data' }, { status: 500 });
         }
 
         const { user, profile, records } = result.data;
-
-        // カテゴリ定義をDBから取得
-        const HEALTH_CATEGORIES = await getHealthCategories();
 
         // ステップ1: 総合スコア・カテゴリ別スコア・総合評価を一括で算出
         const analysisPrompt = buildAnalysisPrompt(user, profile, records, HEALTH_CATEGORIES);

@@ -799,18 +799,18 @@ export async function updateQuestionProgress(
         }
     });
 
-    // 次の質問を算出してセッションのチェックポイントを更新
-    const allAnswered = await prisma.healthQuestionProgress.findMany({
-        where: { userId, isAnswered: true },
-        select: { questionId: true }
-    });
+    // 次の質問を算出してセッションのチェックポイントを更新（並列取得）
+    const [allAnswered, session] = await Promise.all([
+        prisma.healthQuestionProgress.findMany({
+            where: { userId, isAnswered: true },
+            select: { questionId: true }
+        }),
+        prisma.healthChatSession.findUnique({
+            where: { id: sessionId },
+            select: { currentPriority: true }
+        }),
+    ]);
     const answeredIds = allAnswered.map(a => a.questionId);
-
-    // 現在のセッションのpriorityを取得
-    const session = await prisma.healthChatSession.findUnique({
-        where: { id: sessionId },
-        select: { currentPriority: true }
-    });
     const currentPriority = (session?.currentPriority || 3) as 3 | 2 | 1;
 
     const nextQ = getNextQuestion(answeredIds, currentPriority);

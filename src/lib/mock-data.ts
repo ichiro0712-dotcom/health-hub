@@ -1,3 +1,7 @@
+/**
+ * TODO: このファイルはモックデータです。DB化が完了したら削除してください。
+ * 参照元: news/page.tsx, debug/health-connect/page.tsx, VideoSection.tsx, NewsSection.tsx
+ */
 import { NewsItem } from '@/types/news';
 import { VideoItem } from '@/types/video';
 
